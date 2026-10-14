@@ -1,0 +1,54 @@
+## GITHUB ACTION FOR R PACKAGE
+## Build, check, test, code coverage
+## Linux and Windows R-CMD-check run as separate jobs; coverage runs on Linux release R only
+## Required secrets: CODECOV_TOKEN
+
+name: r-cmd-check
+on:
+  workflow_dispatch:
+  push:
+    branches: [develop]
+  pull_request:
+
+permissions: read-all
+
+env:
+  GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+  R_KEEP_PKG_SOURCE: yes
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    name: ubuntu-latest (${{ matrix.r }})
+    strategy:
+      fail-fast: false
+      matrix:
+        r: ['devel', 'release', 'oldrel-1']
+        include:
+          - r: 'devel'
+            http-user-agent: 'release'
+
+    steps:
+      - uses: actions/checkout@v6
+      - uses: r-lib/actions/setup-pandoc@v2
+      - uses: quarto-dev/quarto-actions/setup@v2
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: ${{ matrix.r }}
+          http-user-agent: ${{ matrix.http-user-agent }}
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          cache-version: 2
+          extra-packages: |
+            any::rcmdcheck
+            any::pkgdepends
+          needs: check
+
+      - name: R CMD check
+        uses: r-lib/actions/check-r-package@v2
+        with:
+          upload-snapshots: true
+          build_args: 'c("--no-manual","--compact-vignettes=gs+qpdf")'
+          error-on: '"warning"'
+          check-dir: '"check"'
