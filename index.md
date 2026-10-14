@@ -1,6 +1,6 @@
 # ggtargets <img class="ggtargets-logo" src="reference/figures/logo-light.webp" alt="ggtargets-logo" style="width:160px;float:right;" align="right" />
 
-[![ci_badge](https://github.com/royfrancis/ggtargets/workflows/r-cmd-check/badge.svg)](https://github.com/royfrancis/ggtargets/actions?workflow=r-cmd-check) [![codecov](https://codecov.io/gh/royfrancis/ggtargets/branch/main/graph/badge.svg?token=4DOQ8HNQFK)](https://app.codecov.io/gh/royfrancis/targets/) ![status: experimental](https://github.com/GIScience/badges/raw/master/status/experimental.svg)
+[![ci_badge](https://github.com/royfrancis/ggtargets/workflows/r-cmd-check/badge.svg)](https://github.com/royfrancis/ggtargets/actions?workflow=r-cmd-check) [![codecov](https://codecov.io/gh/royfrancis/ggtargets/branch/main/graph/badge.svg?token=4DOQ8HNQFK)](https://app.codecov.io/gh/royfrancis/ggtargets/) ![status: experimental](https://github.com/GIScience/badges/raw/master/status/experimental.svg)
 
 **ggtargets** creates metro-style diagrams of [targets](https://docs.ropensci.org/targets/) pipelines dependency graph and other directed acyclic graphs using ggplot2.
 
