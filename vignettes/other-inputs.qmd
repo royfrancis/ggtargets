@@ -1,0 +1,144 @@
+---
+title: "Other inputs"
+vignette: >
+  %\VignetteIndexEntry{Other inputs}
+  %\VignetteEngine{quarto::html}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r}
+#| include: false
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 4.5,
+  fig.height = 3,
+  dpi = 120
+)
+# size each plot chunk from the plot itself (ggtargets::dag_size()), so
+# nodes, lines and text look the same in every figure
+knitr::opts_hooks$set(dag_fig = function(options) {
+  code <- paste(options$code, collapse = "\n")
+  if (!isTRUE(options$eval) || !grepl("ggplot_dag|tar_ggplot", code)) {
+    return(options)
+  }
+  seed <- if (exists(".Random.seed", globalenv())) {
+    get(".Random.seed", globalenv())
+  }
+  wd <- getwd()
+  on.exit({
+    setwd(wd)
+    if (is.null(seed)) {
+      suppressWarnings(rm(".Random.seed", envir = globalenv()))
+    } else {
+      assign(".Random.seed", seed, globalenv())
+    }
+  })
+  root <- knitr::opts_knit$get("root.dir")
+  if (!is.null(root)) {
+    setwd(root)
+  }
+  size <- tryCatch(
+    {
+      p <- eval(parse(text = code), new.env(parent = knitr::knit_global()))
+      if (ggplot2::is_ggplot(p) && !inherits(p, "patchwork")) {
+        ggtargets::dag_size(p)
+      }
+    },
+    error = function(e) NULL
+  )
+  if (!is.null(size)) {
+    options$fig.width <- size[["width"]]
+    options$fig.height <- size[["height"]]
+  }
+  options
+})
+knitr::opts_chunk$set(dag_fig = TRUE)
+```
+
+```{r}
+#| label: setup
+library(ggtargets)
+```
+
+`tar_ggplot()` is the one-call entry point for a live `targets` pipeline, but everything downstream of `as_dag()` works for any directed acyclic graph.
+
+## An edge-list data frame
+
+The simplest input is a data frame with `from` and `to` columns - the node list is derived from the edges themselves, in the order they first appear:
+
+```{r}
+#| label: edges-only
+#| fig-alt: "A small graph built from an edge-list data frame with no node table."
+edges <- data.frame(from = c("a", "a", "b"), to = c("b", "c", "c"))
+dag <- as_dag(edges)
+ggplot_dag(dag)
+```
+
+## An edge-list data frame with a node table
+
+Pass `nodes` to add attributes - a `label` distinct from `name`, or any column to color by (`node_color`) or to shape by (`node_shape`, see the [Customizing](customizing.html#node-shapes) article):
+
+```{r}
+#| label: edges-and-nodes
+#| fig-alt: "The same graph, nodes colored by a type column from the node table."
+nodes <- data.frame(
+  name = c("a", "b", "c"),
+  type = c("input", "process", "process")
+)
+dag2 <- as_dag(edges, nodes = nodes)
+ggplot_dag(dag2, node_color = "type")
+```
+
+## A `tar_network()`-shaped list
+
+`as_dag()` also accepts the list `targets::tar_network()` returns directly (`tar_dag()` is a thin wrapper around exactly this) - useful for a network object saved from another project, without needing that project's `_targets.R` or store on hand:
+
+```{r}
+#| label: tar-network-list
+#| fig-alt: "A graph built directly from a tar_network()-shaped list (vertices and edges elements), the same shape targets::tar_network() returns."
+#| eval: !expr requireNamespace("targets", quietly = TRUE)
+# saved <- targets::tar_network() # from inside the other project, once
+saved <- list(
+  vertices = data.frame(
+    name = c("a", "b", "c"),
+    type = c("stem", "stem", "stem")
+  ),
+  edges = data.frame(from = c("a", "b"), to = c("b", "c"))
+)
+ggplot_dag(as_dag(saved))
+```
+
+The `type` column of such a list is what draws a node as a circle (a regular target), a square (dynamic branches) or a triangle (an imported function or object), see `targets_node_shapes()`; the example above has only regular targets, so it has only circles and no shape legend.
+
+## A pipeline in another folder
+
+For a *live* pipeline elsewhere (rather than a previously saved network object), use `withr::with_dir()` (see the [Get started](ggtargets.html#plotting-a-pipeline-in-another-folder) article for the full walkthrough, including why `script`/`store` alone aren't enough):
+
+```{r}
+#| label: elsewhere
+#| fig-alt: "A two-target pipeline living in a temporary project folder, plotted via withr::with_dir() from outside that folder."
+#| eval: !expr requireNamespace("targets", quietly = TRUE) && requireNamespace("withr", quietly = TRUE)
+project_dir <- withr::local_tempdir()
+withr::with_dir(project_dir, {
+  targets::tar_script(
+    list(targets::tar_target(x, 1), targets::tar_target(y, x + 1))
+  )
+})
+withr::with_dir(project_dir, tar_ggplot())
+```
+
+## Converting other graph formats
+
+ggtargets reads edge-list data frames and `tar_network()`-shaped lists; it doesn't have a method for igraph objects, Graphviz DOT files, or other graph classes directly (`as_dag()` gives a clear error naming the class). Convert to an edge-list data frame first - for igraph, `igraph::as_data_frame()` does exactly that:
+
+```{r}
+#| label: igraph
+#| fig-alt: "A small graph, converted from an igraph object to an edge-list data frame."
+#| eval: !expr requireNamespace("igraph", quietly = TRUE)
+g <- igraph::graph_from_edgelist(
+  matrix(c("a", "b", "a", "c", "b", "c"), ncol = 2, byrow = TRUE)
+)
+edges_from_igraph <- igraph::as_data_frame(g, what = "edges")
+ggplot_dag(as_dag(edges_from_igraph))
+```

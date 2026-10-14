@@ -1,0 +1,230 @@
+---
+title: "Colors"
+---
+
+```{r}
+#| include: false
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 4.5,
+  fig.height = 3,
+  dpi = 120
+)
+# size each plot chunk from the plot itself (ggtargets::dag_size()), so
+# nodes, lines and text look the same in every figure
+knitr::opts_hooks$set(dag_fig = function(options) {
+  code <- paste(options$code, collapse = "\n")
+  if (!isTRUE(options$eval) || !grepl("ggplot_dag|tar_ggplot", code)) {
+    return(options)
+  }
+  seed <- if (exists(".Random.seed", globalenv())) {
+    get(".Random.seed", globalenv())
+  }
+  wd <- getwd()
+  on.exit({
+    setwd(wd)
+    if (is.null(seed)) {
+      suppressWarnings(rm(".Random.seed", envir = globalenv()))
+    } else {
+      assign(".Random.seed", seed, globalenv())
+    }
+  })
+  root <- knitr::opts_knit$get("root.dir")
+  if (!is.null(root)) {
+    setwd(root)
+  }
+  size <- tryCatch(
+    {
+      p <- eval(parse(text = code), new.env(parent = knitr::knit_global()))
+      if (ggplot2::is_ggplot(p) && !inherits(p, "patchwork")) {
+        ggtargets::dag_size(p)
+      }
+    },
+    error = function(e) NULL
+  )
+  if (!is.null(size)) {
+    options$fig.width <- size[["width"]]
+    options$fig.height <- size[["height"]]
+  }
+  options
+})
+knitr::opts_chunk$set(dag_fig = TRUE)
+```
+
+```{r}
+#| label: setup
+library(ggtargets)
+```
+
+```{r}
+#| label: dag
+dag <- as_dag(
+  data.frame(from = c("a", "a", "b", "c"), to = c("b", "c", "d", "d")),
+  nodes = data.frame(
+    name = c("a", "b", "c", "d"),
+    type = c("input", "process", "process", "output")
+  )
+)
+```
+
+## The default palette
+
+With `node_color = NULL` (the default), each lane gets its own color from `metro_palette()` - dagviz's palette, extended with generated colors so that no color is ever repeated, no legend:
+
+```{r}
+#| label: default
+#| fig-alt: "The graph in the default one-color-per-node palette."
+ggplot_dag(dag)
+```
+
+```{r}
+#| label: palette-swatch
+#| fig-alt: "The first 30 colors of metro_palette() as a row of swatches."
+scales_df <- data.frame(x = 1:30, color = metro_palette(30))
+ggplot2::ggplot(scales_df, ggplot2::aes(x, 1, fill = I(color))) +
+  ggplot2::geom_tile() +
+  ggplot2::theme_void()
+```
+
+The first 18 colors are dagviz's own; further colors are generated, so any number of lanes gets distinct colors. `metro_palette(n)` is always the first `n` colors of a longer palette, so a lane keeps its color as the graph grows.
+
+A palette you supply is never recycled either: if a vector (or function) gives fewer colors than there are lanes (or, with `node_color` set to a column, distinct values), `ggplot_dag()` stops with an error rather than reusing colors.
+
+## `targets` status colors
+
+`targets_status_colors()` is `targets::tar_visnetwork()`'s own status palette, for coloring by build status:
+
+```{r}
+#| label: status
+#| fig-alt: "A hand-built graph with a status column, colored by targets_status_colors()."
+status_dag <- as_dag(
+  data.frame(from = c("a", "a", "b"), to = c("b", "c", "c")),
+  nodes = data.frame(
+    name = c("a", "b", "c"),
+    status = c("uptodate", "outdated", "errored")
+  )
+)
+ggplot_dag(
+  status_dag,
+  node_color = "status",
+  palette = targets_status_colors()
+)
+```
+
+## Coloring by a column
+
+Any node column works the same way - distinct values are mapped to the palette (by order of first appearance, or factor level order), with a fill legend:
+
+```{r}
+#| label: column
+#| fig-alt: "The graph colored by a type column, with a legend."
+ggplot_dag(dag, node_color = "type")
+```
+
+(A `type` column holding `targets`' own vertex types also sets the node shapes, see `targets_node_shapes()`. Coloring by that same column then merges the color and shape legends into one; coloring by another column, such as `status`, gives two.)
+
+## A named palette
+
+A named color vector is matched by value, not position - useful when you want specific colors for specific categories, not just "the next one in the palette":
+
+```{r}
+#| label: named
+#| fig-alt: "The graph colored by type, using an explicit named palette mapping each type to a chosen color."
+ggplot_dag(
+  dag,
+  node_color = "type",
+  palette = c(
+    input = "#1b9e77",
+    process = "#d95f02",
+    output = "#7570b3"
+  )
+)
+```
+
+## Setting colors by hand
+
+To choose the color of every node yourself, color by the `name` column and give a named palette with one entry per node. Edges follow along, since they take their source node's color by default. The legend only repeats the node labels here, so it is dropped:
+
+```{r}
+#| label: manual
+#| fig-alt: "The graph with each node given its own hand-picked color."
+ggplot_dag(
+  dag,
+  node_color = "name",
+  palette = c(
+    a = "#1b9e77",
+    b = "#d95f02",
+    c = "#7570b3",
+    d = "#e7298a"
+  )
+) +
+  ggplot2::guides(fill = "none")
+```
+
+Names are matched by value, so the order of the vector doesn't matter. A node missing from the palette is drawn gray, with a warning.
+
+To give every node the same color, pass a color instead of a column name; `edge_color` takes a single color the same way. Neither adds a legend:
+
+```{r}
+#| label: single
+#| fig-alt: "The graph with every node steel blue and every edge gray."
+ggplot_dag(dag, node_color = "steelblue", edge_color = "gray60")
+```
+
+## Palettes from other packages
+
+Anything that's a `function(n)` returning `n` colors works directly as `palette`:
+
+```{r}
+#| label: viridis
+#| fig-alt: "The graph colored by type using a viridis palette."
+ggplot_dag(dag, node_color = "type", palette = viridisLite::viridis)
+```
+
+```{r}
+#| label: brewer
+#| fig-alt: "The graph colored by type using an RColorBrewer palette."
+ggplot_dag(
+  dag,
+  node_color = "type",
+  palette = function(n) RColorBrewer::brewer.pal(max(n, 3), "Set2")
+)
+```
+
+`randomcoloR::distinctColorPalette` also fits directly - since it's random, `set.seed()` first for a repeatable plot:
+
+```{r}
+#| label: randomcolor
+#| fig-alt: "The graph colored by type using randomly generated but visually distinct colors."
+set.seed(42)
+ggplot_dag(
+  dag,
+  node_color = "type",
+  palette = randomcoloR::distinctColorPalette
+)
+```
+
+## Edge colors
+
+By default (`edge_color = "source"`), each edge is drawn in its source node's color - this is also the only mode that reproduces dagviz's picture pixel-for-pixel, since a shared lane's single line can only show one color.
+
+```{r}
+#| label: edge-source
+#| fig-alt: "The graph with edges colored by their source node (the default)."
+ggplot_dag(dag, edge_color = "source")
+```
+
+```{r}
+#| label: edge-target
+#| fig-alt: "The same graph with edges colored by their target node instead."
+ggplot_dag(dag, edge_color = "target")
+```
+
+```{r}
+#| label: edge-constant
+#| fig-alt: "The same graph with every edge the same gray color."
+ggplot_dag(dag, edge_color = "gray50")
+```
+
+Edge coloring currently has no legend (unlike node coloring) - if you need one, `edge_paths` (in a `dag_layout`) carries the same `from`/`to`/`piece` shape you could build your own `geom_path()` legend from.

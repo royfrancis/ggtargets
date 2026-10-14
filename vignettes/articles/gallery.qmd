@@ -1,0 +1,371 @@
+---
+title: "Gallery"
+---
+
+```{r}
+#| include: false
+run_targets <- requireNamespace("targets", quietly = TRUE)
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  eval = run_targets,
+  fig.width = 5,
+  fig.height = 3.2,
+  dpi = 120
+)
+# size each plot chunk from the plot itself (ggtargets::dag_size()), so
+# nodes, lines and text look the same in every figure
+knitr::opts_hooks$set(dag_fig = function(options) {
+  code <- paste(options$code, collapse = "\n")
+  if (!isTRUE(options$eval) || !grepl("ggplot_dag|tar_ggplot", code)) {
+    return(options)
+  }
+  seed <- if (exists(".Random.seed", globalenv())) {
+    get(".Random.seed", globalenv())
+  }
+  wd <- getwd()
+  on.exit({
+    setwd(wd)
+    if (is.null(seed)) {
+      suppressWarnings(rm(".Random.seed", envir = globalenv()))
+    } else {
+      assign(".Random.seed", seed, globalenv())
+    }
+  })
+  root <- knitr::opts_knit$get("root.dir")
+  if (!is.null(root)) {
+    setwd(root)
+  }
+  size <- tryCatch(
+    {
+      p <- eval(parse(text = code), new.env(parent = knitr::knit_global()))
+      if (ggplot2::is_ggplot(p) && !inherits(p, "patchwork")) {
+        ggtargets::dag_size(p)
+      }
+    },
+    error = function(e) NULL
+  )
+  if (!is.null(size)) {
+    options$fig.width <- size[["width"]]
+    options$fig.height <- size[["height"]]
+  }
+  options
+})
+knitr::opts_chunk$set(dag_fig = TRUE)
+```
+
+```{r}
+#| label: setup
+library(ggtargets)
+```
+
+Three example `targets` pipelines, each written with `targets::tar_script()` and plotted in the default coloring and by build status, plus a few random graphs at different sizes.
+
+## `basic`: about 6 targets, a straight chain
+
+```{r}
+#| label: basic-pipeline
+basic_dir <- tempfile("basic")
+dir.create(basic_dir)
+withr::with_dir(
+  basic_dir,
+  targets::tar_script({
+    tar_option_set(packages = character())
+
+    read_data <- function(n) {
+      data.frame(x = seq_len(n), y = seq_len(n) * 2 + stats::rnorm(n))
+    }
+
+    clean_data <- function(data) {
+      data[stats::complete.cases(data), ]
+    }
+
+    fit_model <- function(data) {
+      stats::lm(y ~ x, data = data)
+    }
+
+    summarize_model <- function(model) {
+      data.frame(
+        term = names(stats::coef(model)),
+        estimate = unname(stats::coef(model))
+      )
+    }
+
+    write_report <- function(summary) {
+      paste(utils::capture.output(print(summary)), collapse = "\n")
+    }
+
+    list(
+      tar_target(n, 20),
+      tar_target(raw_data, read_data(n)),
+      tar_target(clean, clean_data(raw_data)),
+      tar_target(model, fit_model(clean)),
+      tar_target(summary, summarize_model(model)),
+      tar_target(report, write_report(summary))
+    )
+  })
+)
+```
+
+```{r}
+#| label: basic
+#| fig-alt: "The basic example pipeline: a short chain of six targets."
+withr::with_dir(basic_dir, tar_ggplot())
+```
+
+```{r}
+#| label: basic-status
+#| fig-alt: "The basic pipeline after building it, colored by status (all uptodate)."
+withr::with_dir(basic_dir, {
+  targets::tar_make(reporter = "silent")
+  tar_ggplot(node_color = "status", palette = targets_status_colors())
+})
+```
+
+## `branching`: dynamic branching over groups
+
+`tar_network()` collapses a dynamic branching target's individual branches into one node (with a `branches` count) - so this plot is the same size as `basic`'s, just with `type = "pattern"` on the branched targets (drawn as squares, where the other targets are circles), however many branches each has at runtime.
+
+```{r}
+#| label: branching-pipeline
+branching_dir <- tempfile("branching")
+dir.create(branching_dir)
+withr::with_dir(
+  branching_dir,
+  targets::tar_script({
+    tar_option_set(packages = character())
+
+    make_group_data <- function(group, seed) {
+      set.seed(seed)
+      data.frame(group = group, value = stats::runif(5))
+    }
+
+    clean_group <- function(data, threshold) {
+      data[data$value > threshold, ]
+    }
+
+    summarize_group <- function(data) {
+      data.frame(group = data$group[1], mean = mean(data$value))
+    }
+
+    compute_stats <- function(data) {
+      data.frame(group = data$group[1], sd = stats::sd(data$value))
+    }
+
+    merge_all <- function(summary, stats) {
+      merge(summary, stats, by = "group")
+    }
+
+    overall_summary <- function(merged) {
+      data.frame(
+        mean_of_means = mean(merged$mean),
+        mean_of_sds = mean(merged$sd)
+      )
+    }
+
+    write_report <- function(merged, overall) {
+      paste(
+        utils::capture.output(print(merged)),
+        utils::capture.output(print(overall)),
+        collapse = "\n"
+      )
+    }
+
+    list(
+      tar_target(seed, 1),
+      tar_target(threshold, 0.05),
+      tar_target(groups, letters[1:6]),
+      tar_target(
+        group_data,
+        make_group_data(groups, seed),
+        pattern = map(groups)
+      ),
+      tar_target(
+        cleaned,
+        clean_group(group_data, threshold),
+        pattern = map(group_data)
+      ),
+      tar_target(
+        group_summary,
+        summarize_group(cleaned),
+        pattern = map(cleaned)
+      ),
+      tar_target(group_stats, compute_stats(cleaned), pattern = map(cleaned)),
+      tar_target(merged, merge_all(group_summary, group_stats)),
+      tar_target(overall, overall_summary(merged)),
+      tar_target(report, write_report(merged, overall))
+    )
+  })
+)
+```
+
+```{r}
+#| label: branching
+#| fig-alt: "The branching example pipeline, targets colored by whether they are a plain target (stem, a circle) or a dynamically branched one (pattern, a square), with one legend for color and shape."
+withr::with_dir(branching_dir, tar_ggplot(node_color = "type"))
+```
+
+```{r}
+#| label: branching-status
+#| fig-alt: "The branching pipeline after building it, colored by status."
+withr::with_dir(branching_dir, {
+  targets::tar_make(reporter = "silent")
+  tar_ggplot(node_color = "status", palette = targets_status_colors())
+})
+```
+
+## `analysis`: about 20 targets, several parallel branches that merge
+
+```{r}
+#| label: analysis-pipeline
+analysis_dir <- tempfile("analysis")
+dir.create(analysis_dir)
+withr::with_dir(
+  analysis_dir,
+  targets::tar_script({
+    tar_option_set(packages = character())
+
+    make_config <- function() list(scale = 2, offset = 1)
+
+    load_raw <- function(seed) {
+      set.seed(seed)
+      stats::rnorm(50)
+    }
+
+    clean <- function(x) {
+      x[abs(x) < 3]
+    }
+
+    feature <- function(x, fn) {
+      fn(x)
+    }
+
+    combine2 <- function(a, b) {
+      c(a, b)
+    }
+
+    model_fit <- function(x, config) {
+      mean(x) * config$scale + config$offset
+    }
+
+    evaluate <- function(model, other = NULL) {
+      if (is.null(other)) model else mean(c(model, other))
+    }
+
+    report_all <- function(config, ...) {
+      vals <- c(...)
+      paste(
+        "config:",
+        config$scale,
+        config$offset,
+        "| results:",
+        paste(round(vals, 3), collapse = ", ")
+      )
+    }
+
+    list(
+      tar_target(config, make_config()),
+      tar_target(raw_a, load_raw(1)),
+      tar_target(raw_b, load_raw(2)),
+      tar_target(raw_c, load_raw(3)),
+      tar_target(clean_a, clean(raw_a)),
+      tar_target(clean_b, clean(raw_b)),
+      tar_target(clean_c, clean(raw_c)),
+      tar_target(feature_a1, feature(clean_a, mean)),
+      tar_target(feature_a2, feature(clean_a, stats::median)),
+      tar_target(feature_b1, feature(clean_b, mean)),
+      tar_target(feature_ab, combine2(feature_a1, feature_b1)),
+      tar_target(feature_bc, combine2(clean_b, clean_c)),
+      tar_target(model_1, model_fit(combine2(feature_a2, feature_ab), config)),
+      tar_target(model_2, model_fit(combine2(feature_ab, feature_bc), config)),
+      tar_target(model_3, model_fit(combine2(feature_bc, clean_c), config)),
+      tar_target(eval_1, evaluate(model_1)),
+      tar_target(eval_2, evaluate(model_2, model_1)),
+      tar_target(eval_3, evaluate(model_3)),
+      tar_target(summary_all, combine2(combine2(eval_1, eval_2), eval_3)),
+      tar_target(report, report_all(config, summary_all))
+    )
+  })
+)
+```
+
+```{r}
+#| label: analysis
+#| fig-alt: "The analysis example pipeline: about 20 targets with several parallel chains that cross and merge, showing crossings and bridges."
+withr::with_dir(analysis_dir, tar_ggplot())
+```
+
+```{r}
+#| label: analysis-status
+#| fig-alt: "The analysis pipeline after building it, colored by status."
+withr::with_dir(analysis_dir, {
+  targets::tar_make(reporter = "silent")
+  tar_ggplot(node_color = "status", palette = targets_status_colors())
+})
+```
+
+## Random graphs at different sizes
+
+```{r}
+#| label: random-graph
+#| eval: true
+random_dag <- function(seed, n, p) {
+  set.seed(seed)
+  names <- sample(sprintf("n%02d", seq_len(n)))
+  from <- to <- character(0)
+  for (i in seq_len(n)) {
+    for (j in seq_len(n)) {
+      if (i < j && runif(1) < p) {
+        from <- c(from, sprintf("n%02d", i))
+        to <- c(to, sprintf("n%02d", j))
+      }
+    }
+  }
+  as_dag(data.frame(from = from, to = to), nodes = data.frame(name = names))
+}
+```
+
+```{r}
+#| label: random-small
+#| eval: true
+#| fig-alt: "A small random graph with 6 nodes."
+ggplot_dag(random_dag(1, 6, 0.3))
+```
+
+```{r}
+#| label: random-medium
+#| eval: true
+#| fig-alt: "A medium random graph with 15 nodes and moderate edge density."
+ggplot_dag(random_dag(2, 15, 0.15))
+```
+
+```{r}
+#| label: random-large
+#| eval: true
+#| fig-alt: "A larger random graph with 30 nodes, showing several crossings and bridges."
+ggplot_dag(random_dag(3, 30, 0.08))
+```
+
+```{r}
+#| label: random-dense
+#| eval: true
+#| fig-alt: "A densely connected random graph with 20 nodes and high edge probability, showing many crossings."
+ggplot_dag(random_dag(4, 20, 0.3))
+```
+
+```{r}
+#| label: random-sparse
+#| eval: true
+#| fig-alt: "A sparse random graph with 25 nodes and low edge probability, mostly independent chains."
+ggplot_dag(random_dag(5, 25, 0.04))
+```
+
+```{r}
+#| label: random-custom-style
+#| eval: true
+#| fig-alt: "A random graph in a custom style: larger nodes, wider arcs."
+ggplot_dag(
+  random_dag(6, 10, 0.2),
+  style = style_metro(node_radius = 8, arc_radius = 18)
+)
+```

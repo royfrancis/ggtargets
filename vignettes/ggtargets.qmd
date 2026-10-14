@@ -1,0 +1,247 @@
+---
+title: "Get started"
+vignette: >
+  %\VignetteIndexEntry{Get started}
+  %\VignetteEngine{quarto::html}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r}
+#| include: false
+run_targets <- requireNamespace("targets", quietly = TRUE) &&
+  requireNamespace("withr", quietly = TRUE)
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  eval = run_targets,
+  fig.width = 6,
+  fig.height = 3.2,
+  dpi = 120
+)
+# size each plot chunk from the plot itself (ggtargets::dag_size()), so
+# nodes, lines and text look the same in every figure
+knitr::opts_hooks$set(dag_fig = function(options) {
+  code <- paste(options$code, collapse = "\n")
+  if (!isTRUE(options$eval) || !grepl("ggplot_dag|tar_ggplot", code)) {
+    return(options)
+  }
+  seed <- if (exists(".Random.seed", globalenv())) {
+    get(".Random.seed", globalenv())
+  }
+  wd <- getwd()
+  on.exit({
+    setwd(wd)
+    if (is.null(seed)) {
+      suppressWarnings(rm(".Random.seed", envir = globalenv()))
+    } else {
+      assign(".Random.seed", seed, globalenv())
+    }
+  })
+  root <- knitr::opts_knit$get("root.dir")
+  if (!is.null(root)) {
+    setwd(root)
+  }
+  size <- tryCatch(
+    {
+      p <- eval(parse(text = code), new.env(parent = knitr::knit_global()))
+      if (ggplot2::is_ggplot(p) && !inherits(p, "patchwork")) {
+        ggtargets::dag_size(p)
+      }
+    },
+    error = function(e) NULL
+  )
+  if (!is.null(size)) {
+    options$fig.width <- size[["width"]]
+    options$fig.height <- size[["height"]]
+  }
+  options
+})
+knitr::opts_chunk$set(dag_fig = TRUE)
+if (run_targets) {
+  proj_dir <- tempfile("ggtargets-vignette-")
+  dir.create(proj_dir)
+  knitr::opts_knit$set(root.dir = proj_dir)
+}
+```
+
+```{r}
+#| label: setup
+library(ggtargets)
+library(targets)
+```
+
+ggtargets plots a [targets](https://docs.ropensci.org/targets/) pipeline as a ggplot2 object, in dagviz's "metro" style: one row per target, thick colored lines for dependencies, rounded bends where a lane changes column, and a white "bridge" wherever two lines cross.
+
+## Write a small pipeline
+
+`tar_script()` writes a `_targets.R` file. This one reads some numbers, cleans them, fits a model, and reports on it - `fit_model()` is a named function, not inlined, so the next section can edit just its body:
+
+```{r}
+#| label: pipeline
+tar_script({
+  fit_model <- function(data) stats::lm(y ~ x, data = data)
+
+  list(
+    tar_target(raw_data, data.frame(x = 1:20, y = 1:20 * 2 + stats::rnorm(20))),
+    tar_target(clean_data, raw_data[stats::complete.cases(raw_data), ]),
+    tar_target(model, fit_model(clean_data)),
+    tar_target(
+      summary,
+      data.frame(
+        term = names(stats::coef(model)),
+        estimate = unname(stats::coef(model))
+      )
+    ),
+    tar_target(
+      report,
+      paste(utils::capture.output(print(summary)), collapse = "\n")
+    )
+  )
+})
+```
+
+## Plot it
+
+`tar_ggplot()` is the one-call entry point: it reads the pipeline in the current directory and returns a plot.
+
+```{r}
+#| label: first-plot
+#| fig-alt: "A metro-style plot of a five-target pipeline: raw_data, clean_data, model, summary, report, each in its own color, connected top to bottom."
+tar_ggplot()
+```
+
+Reading the plot: each row is one target, in the pipeline's dependency order (a target's row always comes after everything it depends on). Each target gets its own color and lane; a lane runs straight down when nothing else needs the column, and curves left or right - a rounded bend, not a sharp corner - when it has to make room. The dotted gray line from each node to its label is just a leader line, not a dependency.
+
+Before `tar_make()` runs, every target is `outdated` (targets doesn't distinguish "not yet built" from "needs a rebuild" - both are outdated). Color by status to see this directly:
+
+```{r}
+#| label: status-before
+#| fig-alt: "The same pipeline, all five targets shown in the same 'outdated' color, with a legend."
+tar_ggplot(node_color = "status", palette = targets_status_colors())
+```
+
+## Build it, then plot again
+
+```{r}
+#| label: build
+tar_make(reporter = "silent")
+```
+
+```{r}
+#| label: status-after
+#| fig-alt: "The same pipeline after tar_make(), all five targets now shown in the 'uptodate' color."
+tar_ggplot(node_color = "status", palette = targets_status_colors())
+```
+
+Every target is `uptodate` now. Change `fit_model()`'s body (not `raw_data`'s or `clean_data`'s definitions) and only `model` and what depends on it go back to `outdated` - `raw_data` and `clean_data` don't depend on `fit_model()`, so they stay `uptodate`. Without rerunning anything, `tar_ggplot()` shows you exactly what `tar_make()` would rebuild:
+
+```{r}
+#| label: edit
+tar_script({
+  fit_model <- function(data) stats::lm(y ~ x, data = data, weights = NULL)
+
+  list(
+    tar_target(raw_data, data.frame(x = 1:20, y = 1:20 * 2 + stats::rnorm(20))),
+    tar_target(clean_data, raw_data[stats::complete.cases(raw_data), ]),
+    tar_target(model, fit_model(clean_data)),
+    tar_target(
+      summary,
+      data.frame(
+        term = names(stats::coef(model)),
+        estimate = unname(stats::coef(model))
+      )
+    ),
+    tar_target(
+      report,
+      paste(utils::capture.output(print(summary)), collapse = "\n")
+    )
+  )
+})
+```
+
+```{r}
+#| label: status-outdated
+#| fig-alt: "The pipeline after editing fit_model()'s body: model and everything downstream of it (summary, report) are outdated again; raw_data and clean_data, which don't depend on fit_model(), stay uptodate."
+tar_ggplot(node_color = "status", palette = targets_status_colors())
+```
+
+## Filtering
+
+`tar_ggplot()`'s `...` arguments pass straight to [`targets::tar_network()`](https://docs.ropensci.org/targets/reference/tar_network.html), so it filters exactly like `tar_visnetwork()`: `names`/`allow`/`exclude` take [tidyselect](https://tidyselect.r-lib.org/) helpers. `allow` keeps exactly the named targets; `names` keeps them *and* everything upstream they depend on (useful for "show me how target X gets built", not just "show me X"):
+
+```{r}
+#| label: filter-allow
+#| fig-alt: "Just the model and summary targets, with no other nodes."
+tar_ggplot(allow = tidyselect::any_of(c("model", "summary")))
+```
+
+```{r}
+#| label: filter-names
+#| fig-alt: "The model and summary targets plus everything upstream that they depend on (raw_data, clean_data), but not report, which is downstream."
+tar_ggplot(names = tidyselect::any_of(c("model", "summary")))
+```
+
+```{r}
+#| label: filter-exclude
+#| fig-alt: "The pipeline with the report target excluded."
+tar_ggplot(exclude = tidyselect::starts_with("report"))
+```
+
+`targets_only = FALSE` (unlike `tar_ggplot()`'s own default of `TRUE`) also shows imported functions and objects, the way `tar_visnetwork(targets_only = FALSE)` does - useful for seeing exactly what a target depends on, at the cost of a busier plot. Nodes are drawn by their type, as in `tar_visnetwork()`: a regular target is a circle, a dynamic-branching one a square, an imported function an up triangle and an imported object a down triangle, with a legend when more than one shape is drawn.
+
+```{r}
+#| label: imports
+#| fig-alt: "The pipeline with its imported functions as triangles among the target circles, and a legend of the shapes."
+tar_ggplot(targets_only = FALSE)
+```
+
+## Customizing the style
+
+Every visual detail is a `style_metro()` argument - bigger nodes, wider arcs, thicker edges:
+
+```{r}
+#| label: custom-style
+#| fig-alt: "The pipeline drawn larger: bigger nodes, wider bends, thicker edges."
+tar_ggplot(
+  style = style_metro(
+    node_radius = 9,
+    arc_radius = 20,
+    edge_stroke_width = 3,
+    scale = 14
+  )
+)
+```
+
+## Plot size
+
+A plot has a fixed physical size: one data unit is one pixel at 96 dpi. Nodes, lines and text therefore look the same in every pipeline, and a bigger pipeline just gives a bigger plot. `dag_size()` returns that size in inches, legend included. `ggsave_dag()` saves at that size, matching dagviz's own output pixel-for-pixel:
+
+```{r}
+#| label: save
+p <- tar_ggplot()
+dag_size(p)
+ggsave_dag(tempfile(fileext = ".png"), p)
+```
+
+A large pipeline can be too big for the RStudio Plots pane, which clips it. `zoom` scales nodes, lines and text together. `fixed_size = FALSE` instead stretches the plot to fill the device, like an ordinary ggplot. Line widths and text then no longer stay in proportion to the nodes.
+
+```{r}
+#| label: zoom
+#| fig-alt: "The same pipeline at half size: smaller nodes, thinner lines and smaller text, all in the same proportions."
+tar_ggplot(zoom = 0.5)
+```
+
+## Plotting a pipeline in another folder
+
+`tar_ggplot()`'s `script`/`store` arguments locate a pipeline's files, but `targets::tar_network()` (which it wraps) still runs `_targets.R` from the current working directory - and most real pipelines use relative paths, like `tar_source("R")`, that only resolve correctly from the project's own root. The reliable way to plot a pipeline living elsewhere is `withr::with_dir()`:
+
+```{r}
+#| label: other-folder
+#| fig-alt: "The same five-target pipeline, plotted via withr::with_dir() from outside its own project folder."
+# knitr resets the working directory to this vignette's own project folder
+# before every chunk, so switch elsewhere just within this one chunk to
+# demonstrate the pattern.
+setwd(dirname(proj_dir))
+getwd() # not the pipeline's own folder
+withr::with_dir(proj_dir, tar_ggplot())
+```

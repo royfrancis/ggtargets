@@ -1,0 +1,82 @@
+title: ggtargets
+url: https://github.com/royfrancis/ggtargets
+
+template:
+  bootstrap: 5
+  light-switch: true
+  bslib:
+    base_font: {google: "Quicksand"}
+  opengraph:
+    image:
+      src: man/figures/seo.webp
+      alt: "ggtargets card"
+
+authors:
+  Roy Francis:
+    href: https://royfrancis.com
+
+navbar:
+  structure:
+    left: [home, intro, articles, reference, news]
+    right: [search, github, lightswitch]
+  components:
+    home:
+      text: Home
+      href: index.html
+    reference:
+      text: Reference
+      href: reference/index.html
+    news:
+      text: Versions
+      href: news/index.html
+    github:
+      icon: fa-github fa-lg fas
+      href: https://github.com/royfrancis/ggtargets
+
+home:
+  title: "ggtargets: metro-style ggplot2 plots of targets pipelines"
+  sidebar:
+    structure: [links, license, citation, authors, dev]
+
+reference:
+
+- title: Plot a targets pipeline
+  contents:
+   - tar_ggplot
+   - tar_dag
+   - targets_status_colors
+   - targets_node_shapes
+
+- title: Build plots from any DAG
+  contents:
+   - as_dag
+   - dag_layout
+   - ggplot_dag
+   - dag_size
+   - ggsave_dag
+
+- title: Style and layers
+  contents: 
+   - style_metro
+   - dag_layers
+   - dag_theme
+- title: Colors
+  contents: 
+  - metro_palette
+
+articles:
+
+- title: Get started
+  contents: [ggtargets]
+
+- title: Using ggtargets
+  navbar: Usage
+  contents: [articles/colors, customizing, articles/ggplot2-integration, other-inputs]
+
+- title: Examples
+  navbar: Examples
+  contents: [articles/gallery]
+
+- title: Developers
+  navbar: Developers
+  contents: [how-it-works]

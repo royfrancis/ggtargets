@@ -1,0 +1,37 @@
+Package: ggtargets
+Title: Metro Style Diagrams of targets Pipelines Dependency Graph
+Version: 0.0.0.9000
+Date: 2026-10-13
+Authors@R: c(
+    person("Roy", "Francis", , "roy.m.francis@outlook.com", role = c("aut", "cre"),
+    comment = c(ORCID = "0000-0001-8654-3580"))
+  )
+Maintainer: Roy Francis <roy.m.francis@outlook.com>
+Description: Creates metro-style diagrams of targets pipelines dependency graph and other directed acyclic graphs using ggplot2.
+URL:
+ https://github.com/royfrancis/ggtargets
+License: MIT + file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+Config/roxygen2/version: 8.1.1
+Imports:
+    ggplot2 (>= 4.0.0),
+    grDevices,
+    grid
+Suggests:
+    covr,
+    igraph,
+    knitr,
+    png,
+    quarto,
+    svglite,
+    targets,
+    testthat (>= 3.0.0),
+    tidyselect,
+    vdiffr,
+    withr
+BugReports: https://github.com/royfrancis/ggtargets/issues
+VignetteBuilder: quarto
+Config/testthat/edition: 3
+Config/Needs/website: viridisLite, RColorBrewer, randomcoloR, patchwork
+RoxygenNote: 7.3.3

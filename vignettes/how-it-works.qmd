@@ -1,0 +1,172 @@
+---
+title: "How metro layout works"
+vignette: >
+  %\VignetteIndexEntry{How the metro layout works}
+  %\VignetteEngine{quarto::html}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r}
+#| include: false
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 4.5,
+  fig.height = 3,
+  dpi = 120
+)
+# size each plot chunk from the plot itself (ggtargets::dag_size()), so
+# nodes, lines and text look the same in every figure
+knitr::opts_hooks$set(dag_fig = function(options) {
+  code <- paste(options$code, collapse = "\n")
+  if (!isTRUE(options$eval) || !grepl("ggplot_dag|tar_ggplot", code)) {
+    return(options)
+  }
+  seed <- if (exists(".Random.seed", globalenv())) {
+    get(".Random.seed", globalenv())
+  }
+  wd <- getwd()
+  on.exit({
+    setwd(wd)
+    if (is.null(seed)) {
+      suppressWarnings(rm(".Random.seed", envir = globalenv()))
+    } else {
+      assign(".Random.seed", seed, globalenv())
+    }
+  })
+  root <- knitr::opts_knit$get("root.dir")
+  if (!is.null(root)) {
+    setwd(root)
+  }
+  size <- tryCatch(
+    {
+      p <- eval(parse(text = code), new.env(parent = knitr::knit_global()))
+      if (ggplot2::is_ggplot(p) && !inherits(p, "patchwork")) {
+        ggtargets::dag_size(p)
+      }
+    },
+    error = function(e) NULL
+  )
+  if (!is.null(size)) {
+    options$fig.width <- size[["width"]]
+    options$fig.height <- size[["height"]]
+  }
+  options
+})
+knitr::opts_chunk$set(dag_fig = TRUE)
+```
+
+```{r}
+#| label: setup
+library(ggtargets)
+```
+
+The metro style is an R reimplementation of the Python package [dagviz](https://pypi.org/project/dagviz/) (Wim Yedema, Apache-2.0), which [snakevision](https://github.com/OpenOmics/snakevision)'s workflow diagrams also use. This article walks through what those lines do, on small examples chosen to show one idea at a time.
+
+## Row order
+
+Every node gets its own row, in topological order: a node's row always comes after every node it depends on. Ties (nodes with no dependency between them) are broken by *insertion order* - the order nodes and edges were added, not alphabetical or any other sort:
+
+```{r}
+#| label: row-order
+#| fig-alt: "Four nodes z, m, a, x with no edges between them, in their original insertion order top to bottom, not alphabetical order."
+dag <- as_dag(
+  data.frame(
+    from = character(0),
+    to = character(0)
+  ),
+  nodes = data.frame(name = c("z", "m", "a", "x"))
+)
+ggplot_dag(dag)
+```
+
+```{r}
+#| label: row-order-print
+dag_layout(dag, style_metro())$nodes[, c("name", "row")]
+```
+
+## Column allocation
+
+A node's own column is a *lane*: once it has more than one thing depending on it, that lane has to stay open until the last one consumes it. A new node takes the most recently freed lane, or opens a new one to the left if none is free:
+
+```{r}
+#| label: fan-out
+#| fig-alt: "One node with three children, each child in its own column to the left of the parent's lane."
+dag2 <- as_dag(data.frame(from = "root", to = c("leaf1", "leaf2", "leaf3")))
+ggplot_dag(dag2)
+```
+
+```{r}
+#| label: fan-out-print
+dag_layout(dag2, style_metro())$nodes[, c("name", "row", "col")]
+```
+
+`root`'s own lane (column 0) stays open through all three rows, since `leaf3` is still waiting on it; `leaf1` and `leaf2` each open - and immediately close - their own column, since they have no further children of their own.
+
+## Lane reuse
+
+Freed lanes are reused last-in-first-out. In this diamond, `a`'s lane (out-degree 2) stays open through `b` and `c`; `b`'s own lane frees as soon as `d` consumes it, and `c` immediately reuses that exact column, rather than opening a new one:
+
+```{r}
+#| label: diamond
+#| fig-alt: "A diamond graph: a splits into b and c, which both feed into d. b and c's rows share the same column."
+dag3 <- as_dag(
+  data.frame(from = c("a", "a", "b", "c"), to = c("b", "c", "d", "d"))
+)
+ggplot_dag(dag3)
+```
+
+```{r}
+#| label: diamond-print
+dag_layout(dag3, style_metro())$nodes[, c("name", "row", "col")]
+```
+
+## Arcs
+
+When a lane's row isn't in the same column as the node consuming it, the connection bends: a quarter-circle arc from the lane down to the row, then a short horizontal run into the node. `b` and `c` above already showed one each; a node with several inputs arriving from different columns shows more clearly:
+
+```{r}
+#| label: fan-in
+#| fig-alt: "Three separate lanes all arcing in to a single node at the bottom."
+dag4 <- as_dag(data.frame(from = c("src1", "src2", "src3"), to = "sink"))
+ggplot_dag(dag4)
+```
+
+## Bridges
+
+Where a horizontal run crosses another lane's vertical line, a white "bridge" is drawn on top of the vertical line first, then the horizontal line on top of that - the gap is what makes it read as an underpass instead of a crossing:
+
+```{r}
+#| label: bridge
+#| fig-alt: "A graph with a lane crossing, showing a white bridge gap where the horizontal connector passes over a vertical lane."
+dag5 <- as_dag(
+  data.frame(from = c("a", "a", "b", "c"), to = c("c", "d", "d", "e"))
+)
+ggplot_dag(dag5)
+```
+
+## Putting it together
+
+A larger graph combines all of the above - several lanes open and close, arcs and bridges appear wherever a connection doesn't run straight down:
+
+```{r}
+#| label: combined
+#| fig-alt: "A larger graph with about a dozen nodes, several crossing lanes with bridges, and nodes with multiple inputs and outputs."
+edges <- data.frame(
+  from = c(
+    "start",
+    "start",
+    "a1",
+    "a1",
+    "a2",
+    "b1",
+    "b2",
+    "b2",
+    "c1",
+    "c2",
+    "c3"
+  ),
+  to = c("a1", "b1", "a2", "b2", "c1", "b2", "c2", "c3", "end", "end", "end")
+)
+ggplot_dag(as_dag(edges))
+```

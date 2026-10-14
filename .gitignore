@@ -1,0 +1,11 @@
+.Rproj.user
+.DS_Store
+Rplots.pdf
+docs
+inst/doc
+.quarto
+*.pdf
+.pixi
+AGENTS.md
+.claude
+claude*

@@ -1,0 +1,284 @@
+---
+title: "Customizing style"
+vignette: >
+  %\VignetteIndexEntry{Customization}
+  %\VignetteEngine{quarto::html}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r}
+#| include: false
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 4.5,
+  fig.height = 3,
+  dpi = 120
+)
+# size each plot chunk from the plot itself (ggtargets::dag_size()), so
+# nodes, lines and text look the same in every figure
+knitr::opts_hooks$set(dag_fig = function(options) {
+  code <- paste(options$code, collapse = "\n")
+  if (!isTRUE(options$eval) || !grepl("ggplot_dag|tar_ggplot", code)) {
+    return(options)
+  }
+  seed <- if (exists(".Random.seed", globalenv())) {
+    get(".Random.seed", globalenv())
+  }
+  wd <- getwd()
+  on.exit({
+    setwd(wd)
+    if (is.null(seed)) {
+      suppressWarnings(rm(".Random.seed", envir = globalenv()))
+    } else {
+      assign(".Random.seed", seed, globalenv())
+    }
+  })
+  root <- knitr::opts_knit$get("root.dir")
+  if (!is.null(root)) {
+    setwd(root)
+  }
+  size <- tryCatch(
+    {
+      p <- eval(parse(text = code), new.env(parent = knitr::knit_global()))
+      if (ggplot2::is_ggplot(p) && !inherits(p, "patchwork")) {
+        ggtargets::dag_size(p)
+      }
+    },
+    error = function(e) NULL
+  )
+  if (!is.null(size)) {
+    options$fig.width <- size[["width"]]
+    options$fig.height <- size[["height"]]
+  }
+  options
+})
+knitr::opts_chunk$set(dag_fig = TRUE)
+```
+
+```{r}
+#| label: setup
+library(ggtargets)
+```
+
+Every visual detail of the metro style is a `style_metro()` argument. This article shows each one, and a few combinations, against the same small graph with a crossing (so bends and bridges are visible).
+
+```{r}
+#| label: dag
+dag <- as_dag(data.frame(
+  from = c("a", "a", "b", "c"),
+  to = c("b", "c", "d", "d")
+))
+```
+
+## Defaults
+
+```{r}
+#| label: default
+#| fig-alt: "The diamond graph in the default metro style."
+ggplot_dag(dag)
+```
+
+## Node size and fill
+
+`node_radius` sets the node size, the radius of a circle (squares and triangles are drawn to match); `node_fill`, unlike `node_color`, recolors nodes only (edges stay in their own dagviz colors).
+
+```{r}
+#| label: node-radius
+#| fig-alt: "The graph with larger nodes."
+ggplot_dag(dag, style = style_metro(node_radius = 10))
+```
+
+```{r}
+#| label: node-fill
+#| fig-alt: "The graph with every node the same fill color, edges unaffected."
+ggplot_dag(dag, style = style_metro(node_fill = "steelblue"))
+```
+
+## Node border
+
+```{r}
+#| label: node-stroke
+#| fig-alt: "The graph with a thick black node border instead of the default thin white one."
+ggplot_dag(
+  dag,
+  style = style_metro(node_stroke = "black", node_stroke_width = 3)
+)
+```
+
+## Node shapes
+
+A node's shape shows its `type`, as in `targets::tar_visnetwork()`: when the nodes have a `type` column holding `targets`' own vertex types, a regular target (`stem`) is a circle, a dynamic-branching target (`pattern`) a square, and an imported `function` and `object` an up and a down triangle (`targets_node_shapes()`). Imports are only in the graph with `tar_ggplot(targets_only = FALSE)`. A legend names the shapes whenever more than one is drawn.
+
+```{r}
+#| label: node-shapes
+#| fig-alt: "The graph with circles and squares, and a legend of the two."
+typed <- as_dag(
+  data.frame(from = c("a", "a", "b", "c"), to = c("b", "c", "d", "d")),
+  nodes = data.frame(
+    name = c("a", "b", "c", "d"),
+    type = c("stem", "stem", "pattern", "pattern")
+  )
+)
+ggplot_dag(typed)
+```
+
+`node_shape` picks another column to shape by, and `shapes` says which shape each of its values gets (`"circle"`, `"square"`, `"diamond"`, `"triangle"` or `"triangle_down"`). With `node_color` set to the same column, the legend is one. Any value that `shapes` doesn't name is a circle (with a warning, when the column is named).
+
+```{r}
+#| label: node-shape-column
+#| fig-alt: "The graph with a diamond, circles and a triangle, colored by the same column, with one legend."
+roles <- as_dag(
+  data.frame(from = c("a", "a", "b", "c"), to = c("b", "c", "d", "d")),
+  nodes = data.frame(
+    name = c("a", "b", "c", "d"),
+    role = c("input", "step", "step", "output")
+  )
+)
+ggplot_dag(
+  roles,
+  node_color = "role",
+  node_shape = "role",
+  shapes = c(input = "diamond", step = "circle", output = "triangle")
+)
+```
+
+A single shape name draws every node as that shape, and the shape legend is removed like any ggplot2 legend:
+
+```{r}
+#| label: node-shape-single
+#| fig-alt: "The graph with every node a square."
+ggplot_dag(typed, node_shape = "square")
+```
+
+```{r}
+#| label: node-shape-no-legend
+#| fig-alt: "The graph with circles and squares and no legend."
+ggplot_dag(typed) + ggplot2::guides(shape = "none")
+```
+
+The plot ends a margin of `scale` from the nodes' centers. A triangle or diamond reaches further than a circle of the same `node_radius`, so with a large `node_radius` (about 7 or more, at the default `scale = 10`) one in the first or last row, or the first column, can be cut off: raise `scale` too.
+
+## Edge width
+
+```{r}
+#| label: edge-width
+#| fig-alt: "The graph with much thicker edges."
+ggplot_dag(dag, style = style_metro(edge_stroke_width = 5))
+```
+
+## Label font
+
+```{r}
+#| label: label-font
+#| fig-alt: "The graph with a larger serif label font."
+ggplot_dag(
+  dag,
+  style = style_metro(label_font_family = "serif", label_font_size = 20)
+)
+```
+
+```{r}
+#| label: label-color
+#| fig-alt: "The graph with dark red label text."
+ggplot_dag(dag, style = style_metro(label_font_color = "darkred"))
+```
+
+## Label leader line
+
+```{r}
+#| label: label-leader
+#| fig-alt: "The graph with a solid blue leader line from each node to its label, instead of the default dashed gray one."
+ggplot_dag(
+  dag,
+  style = style_metro(
+    label_arrow_stroke = "steelblue",
+    label_arrow_dash_array = "11"
+  )
+)
+```
+
+## Arc radius
+
+`arc_radius` controls how tight or wide a lane's bend is.
+
+```{r}
+#| label: arc-radius-tight
+#| fig-alt: "The graph with a tight arc radius, sharper bends."
+ggplot_dag(dag, style = style_metro(arc_radius = 6))
+```
+
+```{r}
+#| label: arc-radius-wide
+#| fig-alt: "The graph with a wide arc radius, gentler bends."
+ggplot_dag(dag, style = style_metro(arc_radius = 25))
+```
+
+## Bridge color
+
+The white gap under a crossing line is `bridge_color`. On a white background it's invisible against the page; giving it a visible color shows what it's doing.
+
+```{r}
+#| label: bridge-color
+#| fig-alt: "The graph with the bridge (the gap drawn under a crossing edge) colored pink instead of white, so it's visible against the page."
+ggplot_dag(dag, style = style_metro(bridge_color = "pink"))
+```
+
+## Minimum width
+
+By default (`minimal_width = NULL`) the plot ends just past its longest label, measured from the label text, so a long label widens the plot and a short one doesn't leave empty space. A number gives dagviz's rule instead: the plot is at least that many pixels wide, even when the graph itself is narrow. dagviz uses `500`, because an SVG can't measure its own text and so leaves generous room for the labels.
+
+```{r}
+#| label: minimal-width
+#| fig-alt: "The same small graph, forced wide by a large minimal_width, leaving blank space to the right of the labels."
+ggplot_dag(dag, style = style_metro(minimal_width = 900))
+```
+
+## A dark background
+
+`style_metro()` doesn't have a `background` argument - the background comes from `dag_theme()`'s `plot.background`/`panel.background`, added after `dag_layers()`. Match `node_stroke`, `bridge_color` and `label_font_color` to the background for a legible dark-mode variant, the way dagviz's own dark-style example does:
+
+```{r}
+#| label: dark
+#| fig-alt: "The graph rendered in dark mode: a near-black background, white text, and node borders and bridges matched to the background color."
+ggplot_dag(
+  dag,
+  style = style_metro(
+    node_stroke = "#1a1a1a",
+    bridge_color = "#1a1a1a",
+    label_font_color = "white"
+  )
+) +
+  ggplot2::theme(
+    plot.background = ggplot2::element_rect(fill = "#1a1a1a", color = NA),
+    panel.background = ggplot2::element_rect(fill = "#1a1a1a", color = NA)
+  )
+```
+
+## Compact and large layouts
+
+`scale` sets the grid spacing - everything else follows it if you scale the other size parameters proportionally.
+
+```{r}
+#| label: compact
+#| fig-alt: "The graph drawn compactly: small scale, small nodes and arcs."
+ggplot_dag(dag, style = style_metro(scale = 5, node_radius = 3, arc_radius = 7))
+```
+
+```{r}
+#| label: large
+#| fig-alt: "The graph drawn large: big scale, big nodes and arcs, thick edges."
+ggplot_dag(
+  dag,
+  style = style_metro(
+    scale = 20,
+    node_radius = 14,
+    arc_radius = 28,
+    edge_stroke_width = 4
+  )
+)
+```
+
+## Leaving nodes out
+
+To leave targets out of a pipeline plot, use `tar_ggplot(exclude = ...)` (see `vignette("ggtargets")`): it drops them and their incident edges, without reconnecting their neighbors. For an edge list, filter the data frame before calling `as_dag()`.
