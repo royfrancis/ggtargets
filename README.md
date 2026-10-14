@@ -1,10 +1,10 @@
-# ggtargets <a href='https://github.com/royfrancis/ggtargets'><img src='man/figures/logo-light.webp' align="right" height="100" /></a>
+# ggtargets <a href='https://github.com/royfrancis/ggtargets'><img src='man/figures/logo-light.webp' align="right" height="200px" /></a>
 
 [![ci_badge](https://github.com/royfrancis/ggtargets/workflows/r-cmd-check/badge.svg)](https://github.com/royfrancis/ggtargets/actions?workflow=r-cmd-check) [![codecov](https://codecov.io/gh/royfrancis/ggtargets/branch/main/graph/badge.svg?token=4DOQ8HNQFK)](https://app.codecov.io/gh/royfrancis/targets/) ![status: experimental](https://github.com/GIScience/badges/raw/master/status/experimental.svg)
 
 **ggtargets** creates metro-style diagrams of [targets](https://docs.ropensci.org/targets/) pipelines dependency graph and other directed acyclic graphs using ggplot2.
 
-![](man/figures/README-hero-1.png){width="40%"}
+![](man/figures/README-hero-1.png)
 
 ## Installation
 
@@ -41,7 +41,7 @@ withr::with_dir(withr::local_tempdir(), {
 })
 ```
 
-![](man/figures/README-targets-example-1.png){width="40%"}
+![](man/figures/README-targets-example-1.png)
 
 Color by build status to see what's out of date at a glance:
 
@@ -60,7 +60,7 @@ withr::with_dir(withr::local_tempdir(), {
 })
 ```
 
-![](man/figures/README-targets-status-1.png){width="40%"}
+![](man/figures/README-targets-status-1.png)
 
 Nodes are drawn by their type, as `targets::tar_visnetwork()` does: a circle for a regular target, a square for a dynamic-branching one, and an up and a down triangle for imported functions and objects (which are in the graph with `targets_only = FALSE`). A legend names the shapes:
 
@@ -78,7 +78,7 @@ withr::with_dir(withr::local_tempdir(), {
 })
 ```
 
-![](man/figures/README-targets-shapes-1.png){width="40%"}
+![](man/figures/README-targets-shapes-1.png)
 
 ## Example: any directed acyclic graph
 
@@ -90,7 +90,7 @@ nodes <- data.frame(name = c("a", "b", "c", "d"), type = c("input", "process", "
 ggplot_dag(as_dag(edges, nodes = nodes), node_color = "type")
 ```
 
-![](man/figures/README-dataframe-example-1.png){width="40%"}
+![](man/figures/README-dataframe-example-1.png)
 
 See `vignette("ggtargets")` to get started, and `browseVignettes("ggtargets")` for more (customizing the style, other inputs, how the layout works). A few more articles
 (colors, working with ggplot2, a gallery) are pkgdown-only for now, since the package doesn't ship them to keep install-time dependencies light - build the site locally with `pkgdown::build_site()` to read them.
