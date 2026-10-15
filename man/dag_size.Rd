@@ -16,7 +16,8 @@ A named numeric vector, \code{c(width =, height =)}, in inches.
 For a plot drawn with a fixed panel size (the \code{\link[=ggplot_dag]{ggplot_dag()}} default),
 returns the full plot's size, including any legend or title added with
 \code{\link[ggplot2:labs]{ggplot2::labs()}}; a legend taller than the graph makes the plot taller,
-so it isn't cut off. Otherwise, returns the view box size at 1 px per data
+so it isn't cut off (with a few percent to spare, as devices measure text
+slightly differently). Otherwise, returns the view box size at 1 px per data
 unit (96 dpi), read from the \code{coord_fixed()} limits that \code{\link[=dag_layers]{dag_layers()}}
 sets. Useful for sizing figures, e.g. knitr's \code{fig.width}/\code{fig.height}.
 }

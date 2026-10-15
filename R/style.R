@@ -101,12 +101,20 @@ check_zoom <- function(zoom) {
   invisible(zoom)
 }
 
+# dag_size() measures text on the open device, or on a pdf one when none is
+# open, but the plot is then drawn on another, and devices measure text
+# slightly differently (a Windows png device measured a legend 1.5% taller than
+# the pdf one). A legend that spills over the figure's ends has no room to
+# spare, so it is given this fraction more, or it is cut off.
+dag_size_margin <- 0.04
+
 #' The size of a DAG plot
 #'
 #' For a plot drawn with a fixed panel size (the [ggplot_dag()] default),
 #' returns the full plot's size, including any legend or title added with
 #' [ggplot2::labs()]; a legend taller than the graph makes the plot taller,
-#' so it isn't cut off. Otherwise, returns the view box size at 1 px per data
+#' so it isn't cut off (with a few percent to spare, as devices measure text
+#' slightly differently). Otherwise, returns the view box size at 1 px per data
 #' unit (96 dpi), read from the `coord_fixed()` limits that [dag_layers()]
 #' sets. Useful for sizing figures, e.g. knitr's `fig.width`/`fig.height`.
 #'
@@ -132,7 +140,8 @@ dag_size <- function(plot) {
     # and a title (or anything else above or below the panel) puts the panel
     # off that center: the legend then reaches `|above - below| / 2` further
     # towards the lighter side. So the figure must be as tall as the legend
-    # plus that offset.
+    # plus that offset, and `dag_size_margin` for text measured differently on
+    # the device that draws it.
     boxes <- gt$grobs[gt$layout$name %in% c("guide-box-right", "guide-box-left")]
     legend_height <- max(0, vapply(
       boxes,
@@ -150,7 +159,10 @@ dag_size <- function(plot) {
     below <- sum(heights[-seq_len(panel$b[1])])
     return(c(
       width = grid::convertWidth(sum(gt$widths), "in", valueOnly = TRUE),
-      height = max(sum(heights), legend_height + abs(above - below))
+      height = max(
+        sum(heights),
+        (legend_height + abs(above - below)) * (1 + dag_size_margin)
+      )
     ))
   }
   limits <- plot$coordinates$limits

@@ -382,6 +382,30 @@ test_that("a tall legend isn't cut off either when the plot has a title or a cap
   }
 })
 
+test_that("dag_size()'s margin covers a bitmap device measuring the legend taller", {
+  # dag_size() measures on a pdf device when none is open, but a png device
+  # (the Windows one measured 1.5% taller) draws the plot
+  skip_if_not(capabilities("png"))
+  p <- ggplot_dag(
+    typed_dag(),
+    node_color = "status",
+    palette = targets_status_colors()
+  ) +
+    ggplot2::labs(title = "my dag")
+  from_pdf <- dag_size(p)[["height"]]
+  grDevices::png(
+    withr::local_tempfile(fileext = ".png"),
+    width = 4,
+    height = 4,
+    units = "in",
+    res = 96
+  )
+  withr::defer(grDevices::dev.off())
+  on_device <- dag_size(p)[["height"]]
+  # what the png device measured, without the margin, fits in the pdf figure
+  expect_lte(on_device / (1 + dag_size_margin), from_pdf)
+})
+
 test_that("tar_ggplot()'s defaults draw each vertex type with the targets shape", {
   # what tar_dag() returns for a pipeline with functions and objects, without
   # running one
