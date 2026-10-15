@@ -49,6 +49,43 @@ jobs:
       - name: Install package for vignettes
         run: R.exe CMD INSTALL .
 
+      # TEMPORARY: remove once the test-shape.R:378 failure is understood.
+      # dag_size() measures the legend on a pdf(NULL) device; this prints what the
+      # Windows png devices measure instead, and how much room the saved PNG has.
+      - name: Diagnose legend cut-off (temporary)
+        continue-on-error: true
+        shell: Rscript {0}
+        run: |
+          library(ggtargets)
+          source("tests/testthat/helper-shapes.R")
+          p <- ggplot_dag(typed_dag(), node_color = "status",
+                          palette = targets_status_colors()) +
+            ggplot2::labs(title = "my dag")
+          cat("R:", R.version.string, "\n")
+          cat("ragg:", requireNamespace("ragg", quietly = TRUE),
+              " Cairo:", requireNamespace("Cairo", quietly = TRUE),
+              " bitmapType:", getOption("bitmapType"), "\n")
+          s_pdf <- dag_size(p)
+          for (type in c("windows", "cairo")) {
+            f <- tempfile(fileext = ".png")
+            grDevices::png(f, width = s_pdf[["width"]], height = s_pdf[["height"]],
+                           units = "in", res = 96, bg = "white", type = type)
+            s_dev <- dag_size(p)
+            print(p)
+            grDevices::dev.off()
+            img <- png::readPNG(f)
+            ink <- which(apply(img[, , 1:3] < 0.99, 1, any))
+            cat(sprintf("type=%-7s height: pdf=%.2f px, measured on device=%.2f px | file rows=%d, last ink row=%d, bottom slack=%d\n",
+                        type, s_pdf[["height"]] * 96, s_dev[["height"]] * 96,
+                        dim(img)[1], max(ink), dim(img)[1] - max(ink)))
+          }
+          f <- tempfile(fileext = ".png")
+          ggsave_dag(f, p, bg = "white")
+          img <- png::readPNG(f)
+          ink <- which(apply(img[, , 1:3] < 0.99, 1, any))
+          cat(sprintf("ggsave_dag(): file rows=%d, last ink row=%d, bottom slack=%d\n",
+                      dim(img)[1], max(ink), dim(img)[1] - max(ink)))
+
       - name: R CMD check
         uses: r-lib/actions/check-r-package@v2
         with:
