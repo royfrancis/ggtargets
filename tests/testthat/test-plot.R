@@ -211,7 +211,10 @@ test_that("ggplot_dag() and ggsave_dag() handle the empty dag without error", {
   expect_s3_class(p, "ggplot")
   expect_silent(ggplot2::ggplot_build(p))
   f <- withr::local_tempfile(fileext = ".png")
-  expect_no_error(ggsave_dag(f, p))
+  # an empty dag is a 1 x 1 px image, and the Windows png() device (what
+  # ggsave() uses without ragg) warns that this is an unlikely size; that isn't
+  # what is tested
+  expect_no_error(suppressWarnings(ggsave_dag(f, p)))
 })
 
 chain_dag <- function(n) {
