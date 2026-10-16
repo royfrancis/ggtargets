@@ -17,3 +17,5 @@
 ^AGENTS\.md$
 ^\.claude$
 ^index\.md$
+^conda\.recipe$
+^output$

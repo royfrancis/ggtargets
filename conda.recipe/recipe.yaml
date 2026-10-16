@@ -1,0 +1,44 @@
+## rattler-build recipe for the conda package r-ggtargets (noarch, pure R)
+## The version comes from DESCRIPTION through the GGTARGETS_VERSION env var,
+## which .github/workflows/pixi.yml sets. To build locally from the repo root:
+##   GGTARGETS_VERSION=$(sed -n 's/^Version: *//p' DESCRIPTION) \
+##     rattler-build build --recipe conda.recipe -c conda-forge
+
+schema_version: 1
+
+context:
+  name: ggtargets
+  version: ${{ env.get("GGTARGETS_VERSION") }}
+
+package:
+  name: r-${{ name }}
+  version: ${{ version }}
+
+source:
+  path: ..
+
+build:
+  number: 0
+  noarch: generic
+  script: R CMD INSTALL .
+
+requirements:
+  host:
+    - r-base
+    - r-ggplot2 >=4.0.0
+  run:
+    - r-base
+    - r-ggplot2 >=4.0.0
+
+tests:
+  - script:
+      - Rscript -e "library(ggtargets)"
+      - Rscript -e "library(ggtargets); p <- ggplot_dag(as_dag(data.frame(from = 'a', to = 'b'))); stopifnot(inherits(p, 'ggplot'))"
+
+about:
+  homepage: https://royfrancis.github.io/ggtargets
+  repository: https://github.com/royfrancis/ggtargets
+  documentation: https://royfrancis.github.io/ggtargets
+  license: MIT
+  license_file: LICENSE.md
+  summary: "Metro-Style Diagrams of 'targets' Pipeline Dependency Graphs"
