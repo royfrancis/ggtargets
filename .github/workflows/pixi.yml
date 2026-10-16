@@ -1,8 +1,10 @@
 ## GITHUB ACTION FOR R PACKAGE
 ## Build the conda package (noarch, pure R) with rattler-build and upload it to prefix.dev
 ## Recipe: conda.recipe/recipe.yaml; the version is read from DESCRIPTION
-## Upload runs on v* tag pushes, or on a manual run with `upload` ticked; both must be
-## on a tag matching the DESCRIPTION version. A manual run with `upload` unticked only builds.
+## Upload runs on v* tag pushes, or on a manual run with `upload` ticked. A manual run with
+## `upload` unticked only builds. When the ref is a tag it must match the DESCRIPTION version;
+## a manual run from a branch uploads whatever version DESCRIPTION has. prefix.dev won't
+## overwrite a version, so bump DESCRIPTION before uploading again.
 ## Upload uses OIDC trusted publishing, so no secret is needed. One-time setup on prefix.dev:
 ## make sure the channel exists, then add this repo and workflow file (pixi.yml) under the
 ## channel's Repository Access. The channel is the namespace's primary channel, royfrancis
@@ -29,7 +31,7 @@ env:
   PREFIX_CHANNEL: ${{ vars.PREFIX_CHANNEL || 'royfrancis' }}
 
 jobs:
-  conda:
+  pixi-build:
     runs-on: ubuntu-latest
 
     steps:
@@ -41,11 +43,11 @@ jobs:
           test -n "$version"
           echo "GGTARGETS_VERSION=$version" >> "$GITHUB_ENV"
 
-      - name: Check ref matches package version
-        if: github.event_name == 'push' || inputs.upload
+      - name: Check tag matches package version
+        if: github.ref_type == 'tag' && (github.event_name == 'push' || inputs.upload)
         run: |
           if [ "$GITHUB_REF_NAME" != "v$GGTARGETS_VERSION" ]; then
-            echo "::error::Ref '$GITHUB_REF_NAME' is not 'v$GGTARGETS_VERSION' (the DESCRIPTION version); refusing to upload"
+            echo "::error::Tag '$GITHUB_REF_NAME' is not 'v$GGTARGETS_VERSION' (the DESCRIPTION version); refusing to upload"
             exit 1
           fi
 
