@@ -5,10 +5,9 @@
 ## `upload` unticked only builds. When the ref is a tag it must match the DESCRIPTION version;
 ## a manual run from a branch uploads whatever version DESCRIPTION has. prefix.dev won't
 ## overwrite a version, so bump DESCRIPTION before uploading again.
-## Upload uses OIDC trusted publishing, so no secret is needed. One-time setup on prefix.dev:
-## make sure the channel exists, then add this repo and workflow file (pixi.yml) under the
-## channel's Repository Access. The channel is the namespace's primary channel, royfrancis
-## (https://prefix.dev/royfrancis); a non-primary channel would be <namespace>/<channel>.
+## Upload uses a prefix.dev API key. Required secret: PREFIX_API_KEY (a key with read/write
+## access to the channel, created under Settings > API keys on prefix.dev). The channel is
+## royfrancis/ggtargets, written <namespace>/<channel> (https://prefix.dev/royfrancis/ggtargets).
 ## Override it with the repo variable PREFIX_CHANNEL.
 
 name: pixi
@@ -25,10 +24,9 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 env:
-  PREFIX_CHANNEL: ${{ vars.PREFIX_CHANNEL || 'royfrancis' }}
+  PREFIX_CHANNEL: ${{ vars.PREFIX_CHANNEL || 'royfrancis/ggtargets' }}
 
 jobs:
   pixi-build:
@@ -59,4 +57,6 @@ jobs:
 
       - name: Upload to prefix.dev
         if: github.event_name == 'push' || inputs.upload
+        env:
+          PREFIX_API_KEY: ${{ secrets.PREFIX_API_KEY }}
         run: rattler-build upload prefix --channel "$PREFIX_CHANNEL" output/noarch/*.conda
