@@ -24,11 +24,16 @@ build:
 
 requirements:
   host:
-    - r-base
+    - r-base >=4.1
     - r-ggplot2 >=4.0.0
   run:
-    - r-base
+    - r-base >=4.1
     - r-ggplot2 >=4.0.0
+  # r-base exports a pin to the minor version it was built with (r-base >=4.5,<4.6.0a0),
+  # which would tie this pure R package to one R version; use the explicit bound above instead
+  ignore_run_exports:
+    by_name:
+      - r-base
 
 tests:
   - script:
