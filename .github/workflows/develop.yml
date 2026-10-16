@@ -1,7 +1,5 @@
 ## GITHUB ACTION FOR R PACKAGE
-## Build, check, test, code coverage
-## Linux and Windows R-CMD-check run as separate jobs; coverage runs on Linux release R only
-## Required secrets: CODECOV_TOKEN
+## Build, check, test
 
 name: r-cmd-check
 on:

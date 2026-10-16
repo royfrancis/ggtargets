@@ -1,8 +1,8 @@
 #' Plot a DAG or a DAG layout
 #'
 #' `ggplot_dag()` is `ggplot() + dag_layers(lay, ...) + dag_theme()`.
-#' Given a `dag` instead of a `dag_layout`, it lays it out with
-#' [style_metro()] first.
+#' Given a `dag` instead of a `dag_layout`, it first lays it out with
+#' [dag_layout()], in the `style` you give it ([style_metro()] by default).
 #'
 #' By default (`fixed_size = TRUE`) the panel gets an absolute size of
 #' `zoom` px (at 96 dpi) per data unit, via `theme(panel.widths,
@@ -24,8 +24,8 @@
 #'
 #' @param x A `dag_layout` (from [dag_layout()]) or a `dag` (from
 #'   [as_dag()] or [tar_dag()]).
-#' @param node_color,palette,edge_color,node_shape,shapes Passed to
-#'   [dag_layers()].
+#' @param node_color,palette,edge_color,node_shape,shapes,node_size,edge_width
+#'   Passed to [dag_layers()].
 #' @param style A [style_metro()] object, used to lay out `x` when it is a
 #'   `dag` (ignored for a `dag_layout`, which carries its own).
 #' @param fixed_size If `TRUE` (the default), fix the panel's absolute
@@ -51,6 +51,18 @@
 #'   shapes = c("diamond", "circle", "triangle")
 #' )
 #' dag_size(ggplot_dag(dag))
+#'
+#' # a collapsed graph, with node size and edge width showing the counts
+#' nodes <- data.frame(
+#'   name = c("raw", "clean", "tidy", "fit", "eval", "report"),
+#'   stage = c("data", "data", "data", "model", "model", "report")
+#' )
+#' edges <- data.frame(
+#'   from = c("raw", "clean", "tidy", "tidy", "fit", "eval"),
+#'   to = c("clean", "tidy", "fit", "eval", "eval", "report")
+#' )
+#' small <- dag_collapse(as_dag(edges, nodes = nodes), "stage")
+#' ggplot_dag(small, node_color = "stage", node_size = "n", edge_width = "n")
 ggplot_dag <- function(
   x,
   node_color = NULL,
@@ -58,6 +70,8 @@ ggplot_dag <- function(
   palette = metro_palette,
   node_shape = NULL,
   shapes = targets_node_shapes(),
+  node_size = NULL,
+  edge_width = NULL,
   style = style_metro(),
   fixed_size = TRUE,
   zoom = 1
@@ -76,6 +90,8 @@ ggplot_dag <- function(
       palette = palette,
       node_shape = node_shape,
       shapes = shapes,
+      node_size = node_size,
+      edge_width = edge_width,
       zoom = zoom
     ) +
     dag_theme()
@@ -135,8 +151,8 @@ dag_size <- function(plot) {
     gt <- ggplot2::ggplotGrob(plot)
     heights <- grid::convertHeight(gt$heights, "in", valueOnly = TRUE)
     # A legend taller than the panel (a few nodes, many legend entries) isn't
-    # laid out in the plot's own height: it is centred on the panel and
-    # spills over both ends. The figure is centred on the whole plot, though,
+    # laid out in the plot's own height: it is centered on the panel and
+    # spills over both ends. The figure is centered on the whole plot, though,
     # and a title (or anything else above or below the panel) puts the panel
     # off that center: the legend then reaches `|above - below| / 2` further
     # towards the lighter side. So the figure must be as tall as the legend

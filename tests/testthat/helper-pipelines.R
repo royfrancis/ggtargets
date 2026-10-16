@@ -5,5 +5,5 @@
 pipelines_dir <- normalizePath(test_path("fixtures", "pipelines"))
 
 use_pipeline <- function(name) {
-  file.copy(file.path(pipelines_dir, name, "_targets.R"), "_targets.R")
+  stopifnot(file.copy(file.path(pipelines_dir, name, "_targets.R"), "_targets.R"))
 }

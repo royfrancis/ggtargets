@@ -4,7 +4,8 @@ title: "Gallery"
 
 ```{r}
 #| include: false
-run_targets <- requireNamespace("targets", quietly = TRUE)
+run_targets <- requireNamespace("targets", quietly = TRUE) &&
+  requireNamespace("withr", quietly = TRUE)
 knitr::opts_chunk$set(
   collapse = TRUE,
   comment = "#>",
@@ -59,7 +60,7 @@ knitr::opts_chunk$set(dag_fig = TRUE)
 library(ggtargets)
 ```
 
-Three example `targets` pipelines, each written with `targets::tar_script()` and plotted in the default coloring and by build status, plus a few random graphs at different sizes.
+Three example `targets` pipelines, each written with `targets::tar_script()` and plotted in color (the default coloring, or by `type` for the branching one) and by build status, plus a few random graphs at different sizes. The last section collapses two of them: the `analysis` pipeline into its stages, and a random graph into blocks of nodes.
 
 ## `basic`: about 6 targets, a straight chain
 
@@ -124,7 +125,7 @@ withr::with_dir(basic_dir, {
 
 ## `branching`: dynamic branching over groups
 
-`tar_network()` collapses a dynamic branching target's individual branches into one node (with a `branches` count) - so this plot is the same size as `basic`'s, just with `type = "pattern"` on the branched targets (drawn as squares, where the other targets are circles), however many branches each has at runtime.
+`tar_network()` shows a dynamic branching target's individual branches as one node (with a `branches` count), so the plot has the same size however many branches each target has at runtime. The branched targets have `type = "pattern"`, and are drawn as squares, where the other targets are circles.
 
 ```{r}
 #| label: branching-pipeline
@@ -263,31 +264,67 @@ withr::with_dir(
       )
     }
 
-    list(
-      tar_target(config, make_config()),
+    # `config` comes first, before any description is set, so it has none
+    config_targets <- list(tar_target(config, make_config()))
+
+    tar_option_set(description = "load")
+    load_targets <- list(
       tar_target(raw_a, load_raw(1)),
       tar_target(raw_b, load_raw(2)),
-      tar_target(raw_c, load_raw(3)),
+      tar_target(raw_c, load_raw(3))
+    )
+
+    tar_option_set(description = "clean")
+    clean_targets <- list(
       tar_target(clean_a, clean(raw_a)),
       tar_target(clean_b, clean(raw_b)),
-      tar_target(clean_c, clean(raw_c)),
+      tar_target(clean_c, clean(raw_c))
+    )
+
+    tar_option_set(description = "features")
+    feature_targets <- list(
       tar_target(feature_a1, feature(clean_a, mean)),
       tar_target(feature_a2, feature(clean_a, stats::median)),
       tar_target(feature_b1, feature(clean_b, mean)),
       tar_target(feature_ab, combine2(feature_a1, feature_b1)),
-      tar_target(feature_bc, combine2(clean_b, clean_c)),
+      tar_target(feature_bc, combine2(clean_b, clean_c))
+    )
+
+    tar_option_set(description = "model")
+    model_targets <- list(
       tar_target(model_1, model_fit(combine2(feature_a2, feature_ab), config)),
       tar_target(model_2, model_fit(combine2(feature_ab, feature_bc), config)),
-      tar_target(model_3, model_fit(combine2(feature_bc, clean_c), config)),
+      tar_target(model_3, model_fit(combine2(feature_bc, clean_c), config))
+    )
+
+    tar_option_set(description = "evaluate")
+    eval_targets <- list(
       tar_target(eval_1, evaluate(model_1)),
       tar_target(eval_2, evaluate(model_2, model_1)),
-      tar_target(eval_3, evaluate(model_3)),
+      tar_target(eval_3, evaluate(model_3))
+    )
+
+    tar_option_set(description = "report")
+    report_targets <- list(
       tar_target(summary_all, combine2(combine2(eval_1, eval_2), eval_3)),
       tar_target(report, report_all(config, summary_all))
+    )
+
+    tar_option_set(description = character(0))
+    c(
+      config_targets,
+      load_targets,
+      clean_targets,
+      feature_targets,
+      model_targets,
+      eval_targets,
+      report_targets
     )
   })
 )
 ```
+
+The targets have a stage in their `description`, set a block at a time with `tar_option_set()`. It doesn't change the plots below, but the [collapsed graphs](#collapsed-graphs) at the end of this page group the targets by it.
 
 ```{r}
 #| label: analysis
@@ -368,4 +405,47 @@ ggplot_dag(
   random_dag(6, 10, 0.2),
   style = style_metro(node_radius = 8, arc_radius = 18)
 )
+```
+
+## Collapsed graphs
+
+`tar_ggplot(collapse_by = )` and `dag_collapse()` merge the nodes that share a value of a column into one node, labeled with how many it stands for, and draw one edge for each pair of groups. See the [Collapsing a pipeline](collapsing.html) article for how stages are set and what can go wrong.
+
+### `analysis` by stage
+
+Collapsing the `analysis` pipeline above by its `description` gives one node per stage, with the number of targets in the label. `config`, which has no stage, stays as it is:
+
+```{r}
+#| label: analysis-collapsed
+#| fig-alt: "The analysis pipeline collapsed to seven nodes, one per row: config, load (3), clean (3), features (5), model (3), evaluate (3) and report (2), joined by lines that bend and cross."
+withr::with_dir(analysis_dir, tar_ggplot(collapse_by = "description"))
+```
+
+The size of a node and the width of an edge can follow `n`, the number of targets in a node and of dependencies in an edge, and `node_color = "description"` colors the nodes by stage:
+
+```{r}
+#| label: analysis-collapsed-sized
+#| fig-alt: "The same seven nodes, now of different sizes, the largest for features and the smallest for config, joined by lines of different widths. Each stage has a color, named in a legend, and config, which has no stage, is gray."
+withr::with_dir(
+  analysis_dir,
+  tar_ggplot(
+    collapse_by = "description",
+    node_color = "description",
+    node_size = "n",
+    edge_width = "n"
+  )
+)
+```
+
+### A random graph by block
+
+Any DAG can be collapsed by a column of its nodes. Here the 30-node graph from above is grouped in blocks of five consecutive numbers (`n01` to `n05` are block A, and so on). The edges of a random graph run from lower to higher numbers, so the blocks can't make a cycle. `edge_width = "n"` shows how many edges each line stands for:
+
+```{r}
+#| label: random-collapsed
+#| eval: true
+#| fig-alt: "The 30-node random graph collapsed to six nodes, A (5), B (5), C (5), D (5), F (5) and E (5), one per row, joined by lines of different widths."
+d <- random_dag(3, 30, 0.08)
+d$nodes$block <- LETTERS[(as.integer(substring(d$nodes$name, 2)) - 1) %/% 5 + 1]
+ggplot_dag(dag_collapse(d, "block"), edge_width = "n")
 ```

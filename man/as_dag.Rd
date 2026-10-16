@@ -18,19 +18,25 @@ as_dag(x, ...)
 \arguments{
 \item{x}{An edge-list data frame with \code{from} and \code{to} columns, or a
 \code{list} with \code{vertices} and \code{edges} elements (the shape
-\code{\link[targets:tar_network]{targets::tar_network()}} returns; see \code{\link[=tar_dag]{tar_dag()}}).}
+\code{\link[targets:tar_network]{targets::tar_network()}} returns; see \code{\link[=tar_dag]{tar_dag()}}). Any other columns
+of the edge-list data frame are kept as edge attributes; a numeric one
+can set the edges' width (\code{edge_width}, see \code{\link[=ggplot_dag]{ggplot_dag()}}).}
 
 \item{...}{Passed on to methods.}
 
 \item{nodes}{Optional data frame of nodes, with at least a \code{name} column,
-listed before any additional nodes implied only by \code{x}'s endpoints.}
+listed before any additional nodes implied only by \code{x}'s endpoints. Its
+other columns are node attributes, but not named \code{row}, \code{col}, \code{x}, \code{y}
+or \code{color_index}: the layout uses those names for its own columns
+(see \code{\link[=dag_layout]{dag_layout()}}), so these names are reserved, and using one is an
+error.}
 }
 \value{
 A \code{dag}: a classed list with \code{nodes} (columns \code{name}, \code{label},
-plus any extra attributes, which \code{node_color} and \code{node_shape} can
-name) and \code{edges}
-(columns \code{from}, \code{to}, plus any extra columns of \code{x}, kept but not
-used for drawing) data frames, in insertion order.
+plus any extra attributes, which \code{node_color}, \code{node_shape} and, for a
+numeric one, \code{node_size} can name) and \code{edges} (columns \code{from}, \code{to},
+plus any extra columns of \code{x}, which only \code{edge_width} uses for
+drawing) data frames, in insertion order.
 }
 \description{
 \code{as_dag()} is the entry point for any DAG that isn't read from a
@@ -47,7 +53,7 @@ other node attributes, pass an edge-list data frame and a \code{nodes}
 table to \code{as_dag.data.frame()} instead.
 
 Node names are identities, and the package matches edge colors on them
-downstream, so every method rejects a name that is \code{NA}
+downstream, so every method rejects a name that is \code{NA}, empty
 or contains \code{"|"} or a carriage return.
 }
 \examples{

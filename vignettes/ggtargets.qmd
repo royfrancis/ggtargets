@@ -9,7 +9,8 @@ vignette: >
 ```{r}
 #| include: false
 run_targets <- requireNamespace("targets", quietly = TRUE) &&
-  requireNamespace("withr", quietly = TRUE)
+  requireNamespace("withr", quietly = TRUE) &&
+  requireNamespace("tidyselect", quietly = TRUE)
 knitr::opts_chunk$set(
   collapse = TRUE,
   comment = "#>",
@@ -110,7 +111,7 @@ tar_script({
 tar_ggplot()
 ```
 
-Reading the plot: each row is one target, in the pipeline's dependency order (a target's row always comes after everything it depends on). Each target gets its own color and lane; a lane runs straight down when nothing else needs the column, and curves left or right - a rounded bend, not a sharp corner - when it has to make room. The dotted gray line from each node to its label is just a leader line, not a dependency.
+Reading the plot: each row is one target, in the pipeline's dependency order (a target's row always comes after everything it depends on). Each target gets its own color and lane; a lane runs straight down when nothing else needs the column, and curves left or right - a rounded bend, not a sharp corner - when it has to make room. The dashed gray line from each node to its label is just a leader line, not a dependency.
 
 Before `tar_make()` runs, every target is `outdated` (targets doesn't distinguish "not yet built" from "needs a rebuild" - both are outdated). Color by status to see this directly:
 
@@ -214,7 +215,7 @@ tar_ggplot(
 
 ## Plot size
 
-A plot has a fixed physical size: one data unit is one pixel at 96 dpi. Nodes, lines and text therefore look the same in every pipeline, and a bigger pipeline just gives a bigger plot. `dag_size()` returns that size in inches, legend included. `ggsave_dag()` saves at that size, matching dagviz's own output pixel-for-pixel:
+A plot has a fixed physical size: one data unit is one pixel at 96 dpi. Nodes, lines and text therefore look the same in every pipeline, and a bigger pipeline just gives a bigger plot. `dag_size()` returns that size in inches, legend included. `ggsave_dag()` saves at that size, which is dagviz's own scale (one data unit is one pixel; set `style_metro(minimal_width = 500)` for its canvas width too):
 
 ```{r}
 #| label: save
@@ -223,7 +224,7 @@ dag_size(p)
 ggsave_dag(tempfile(fileext = ".png"), p)
 ```
 
-A large pipeline can be too big for the RStudio Plots pane, which clips it. `zoom` scales nodes, lines and text together. `fixed_size = FALSE` instead stretches the plot to fill the device, like an ordinary ggplot. Line widths and text then no longer stay in proportion to the nodes.
+A large pipeline can be too big for the RStudio Plots pane, which clips it. `zoom` scales nodes, lines and text together. `fixed_size = FALSE` instead stretches the plot to fill the device, like an ordinary ggplot. Nodes, lines and text keep their size, and only the spacing between the nodes stretches.
 
 ```{r}
 #| label: zoom
@@ -245,3 +246,38 @@ setwd(dirname(proj_dir))
 getwd() # not the pipeline's own folder
 withr::with_dir(proj_dir, tar_ggplot())
 ```
+
+## Collapsing the graph
+
+A pipeline of many targets is easier to read as a few stages. `targets` has no tag or category field for a target, but it has one free-form text field, `description`, so the stage goes there. `tar_option_set(description = )` sets it for every target defined after it, so each block of targets is a stage, and a last call puts the default back:
+
+```{r}
+#| label: stages-pipeline
+tar_script({
+  tar_option_set(description = "ingest")
+  ingest <- list(
+    tar_target(raw_data, 1:10),
+    tar_target(clean_data, raw_data * 2),
+    tar_target(features, clean_data + 1)
+  )
+  tar_option_set(description = "model")
+  model <- list(
+    tar_target(fit_mean, mean(features)),
+    tar_target(fit_median, median(features))
+  )
+  tar_option_set(description = "report")
+  report <- list(tar_target(report_text, c(fit_mean, fit_median)))
+  tar_option_set(description = character(0))
+  c(ingest, model, report)
+})
+```
+
+`collapse_by = "description"` merges the targets that share a stage into one node, with their number in the label. `node_size = "n"` and `edge_width = "n"` show that number as the size of a node and the width of an edge:
+
+```{r}
+#| label: stages-plot
+#| fig-alt: "The pipeline collapsed in three stages, one node per row: ingest (3), the largest, then model (2), then report (1), the smallest, joined by short lines."
+tar_ggplot(collapse_by = "description", node_size = "n", edge_width = "n")
+```
+
+The "Collapsing a pipeline" article on the package website covers this in more detail: per-target descriptions, `tarchetypes::tar_map()`, coloring the collapsed graph by build status, and what happens when stages depend on each other both ways.

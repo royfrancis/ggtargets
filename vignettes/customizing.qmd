@@ -1,7 +1,7 @@
 ---
 title: "Customizing style"
 vignette: >
-  %\VignetteIndexEntry{Customization}
+  %\VignetteIndexEntry{Customizing style}
   %\VignetteEngine{quarto::html}
   %\VignetteEncoding{UTF-8}
 ---
@@ -61,7 +61,7 @@ knitr::opts_chunk$set(dag_fig = TRUE)
 library(ggtargets)
 ```
 
-Every visual detail of the metro style is a `style_metro()` argument. This article shows each one, and a few combinations, against the same small graph with a crossing (so bends and bridges are visible).
+Every visual detail of the metro style is a `style_metro()` argument. This article shows most of them, and a few combinations, against the same small graph with a crossing (so bends and bridges are visible). The exceptions are `node_size_range` and `edge_width_range`, which only matter when a node's size or an edge's width is drawn from a numeric column (`node_size` and `edge_width` of `ggplot_dag()`): see the [Collapsing a pipeline](collapsing.html) article.
 
 ```{r}
 #| label: dag
@@ -81,7 +81,7 @@ ggplot_dag(dag)
 
 ## Node size and fill
 
-`node_radius` sets the node size, the radius of a circle (squares and triangles are drawn to match); `node_fill`, unlike `node_color`, recolors nodes only (edges stay in their own dagviz colors).
+`node_radius` sets the size of every node, the radius of a circle (squares and triangles are drawn to match); to draw each node's size from a numeric column instead, use `node_size` of `ggplot_dag()`. `node_fill`, unlike `node_color`, recolors nodes only (edges stay in their own dagviz colors).
 
 ```{r}
 #| label: node-radius
@@ -123,7 +123,7 @@ typed <- as_dag(
 ggplot_dag(typed)
 ```
 
-`node_shape` picks another column to shape by, and `shapes` says which shape each of its values gets (`"circle"`, `"square"`, `"diamond"`, `"triangle"` or `"triangle_down"`). With `node_color` set to the same column, the legend is one. Any value that `shapes` doesn't name is a circle (with a warning, when the column is named).
+`node_shape` picks another column to shape by, and `shapes` says which shape each of its values gets (`"circle"`, `"square"`, `"diamond"`, `"triangle"` or `"triangle_down"`). With `node_color` set to the same column, the color and shape legends merge into one. Any value that `shapes` doesn't name is a circle (with a warning, when the column is named).
 
 ```{r}
 #| label: node-shape-column
@@ -161,6 +161,8 @@ The plot ends a margin of `scale` from the nodes' centers. A triangle or diamond
 
 ## Edge width
 
+`edge_stroke_width` sets the width of every edge; to draw each edge's width from a numeric column instead, use `edge_width` of `ggplot_dag()`.
+
 ```{r}
 #| label: edge-width
 #| fig-alt: "The graph with much thicker edges."
@@ -188,7 +190,7 @@ ggplot_dag(dag, style = style_metro(label_font_color = "darkred"))
 
 ```{r}
 #| label: label-leader
-#| fig-alt: "The graph with a solid blue leader line from each node to its label, instead of the default dashed gray one."
+#| fig-alt: "The graph with a finely dotted blue leader line from each node to its label, instead of the default dashed gray one."
 ggplot_dag(
   dag,
   style = style_metro(

@@ -90,6 +90,29 @@ dag2 <- as_dag(edges, nodes = nodes)
 ggplot_dag(dag2, node_color = "type")
 ```
 
+## Collapsing by a node column
+
+`dag_collapse()` merges the nodes that share a value of a column into one node, labeled with how many it stands for, and draws the edges between the groups once each, with an `n` that counts them. A node with no value (`NA`) stays on its own. The collapsed graph is a `dag` like any other, so `node_size = "n"` and `edge_width = "n"` can show the counts:
+
+```{r}
+#| label: collapse
+#| fig-alt: "A collapsed graph of six nodes in three stages: data (3), model (2) and report (1), as three nodes of decreasing size, with a wide line from data to model, a thin one from model to report, and a legend of the three stages."
+stages <- as_dag(
+  data.frame(
+    from = c("raw", "clean", "tidy", "tidy", "fit", "eval"),
+    to = c("clean", "tidy", "fit", "eval", "eval", "report")
+  ),
+  nodes = data.frame(
+    name = c("raw", "clean", "tidy", "fit", "eval", "report"),
+    stage = c("data", "data", "data", "model", "model", "report")
+  )
+)
+small <- dag_collapse(stages, "stage")
+ggplot_dag(small, node_color = "stage", node_size = "n", edge_width = "n")
+```
+
+If grouping would make a loop, with a group that depends on another group that depends back on it, `dag_collapse()` stops with an error that names the groups and the edges. The names `row`, `col`, `x`, `y` and `color_index` can't be used for a node column, because the layout keeps them for its own. For a `targets` pipeline, see `tar_ggplot(collapse_by = )`.
+
 ## A `tar_network()`-shaped list
 
 `as_dag()` also accepts the list `targets::tar_network()` returns directly (`tar_dag()` is a thin wrapper around exactly this) - useful for a network object saved from another project, without needing that project's `_targets.R` or store on hand:
@@ -109,7 +132,7 @@ saved <- list(
 ggplot_dag(as_dag(saved))
 ```
 
-The `type` column of such a list is what draws a node as a circle (a regular target), a square (dynamic branches) or a triangle (an imported function or object), see `targets_node_shapes()`; the example above has only regular targets, so it has only circles and no shape legend.
+The `type` column of such a list is what draws a node as a circle (a regular target), a square (dynamic branches) or a triangle (an imported function or object); see `targets_node_shapes()`. The example above has only regular targets, so it has only circles and no shape legend.
 
 ## A pipeline in another folder
 

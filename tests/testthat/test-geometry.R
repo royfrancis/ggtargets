@@ -85,16 +85,18 @@ test_that("a numeric minimal_width gives dagviz's rule: max(minimal_width, 2 * r
 })
 
 test_that("label measuring copes with fonts it can't use, and leaves no device open", {
+  # (relative: a session may already have a device open, as RStudio does)
+  n_devices <- length(grDevices::dev.list())
   # an unknown family only draws grid warnings, which are not ours to report
   expect_no_warning(w <- label_width_px(c("ab", ""), "no such font", 16))
   expect_gt(w[1], 0)
   expect_equal(w[2], 0)
   # an unusable `family` errors inside grid: fall back to 0.6 em per character
   expect_equal(label_width_px(c("ab", ""), character(0), 16), c(19.2, 0))
-  expect_equal(length(grDevices::dev.list()), 0L)
+  expect_equal(length(grDevices::dev.list()), n_devices)
 })
 
-test_that("the view box does not depend on zoom", {
+test_that("dag_size() is proportional to zoom, whatever the view box", {
   lay <- dag_layout(box_dag(), style_metro())
   expect_equal(
     dag_size(ggplot_dag(lay, zoom = 2)) / 2,

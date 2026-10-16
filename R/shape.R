@@ -107,7 +107,8 @@ resolve_node_shape <- function(nodes, node_shape, shapes) {
     map <- stats::setNames(shapes[seq_along(lv)], lv)
   }
 
-  node_shapes <- unname(map[as.character(values)])
+  # by position, not by name: a name subscript of "" never matches
+  node_shapes <- unname(map[match(as.character(values), names(map))])
   node_shapes[is.na(node_shapes)] <- "circle"
   node_shapes <- stats::setNames(node_shapes, nodes$name)
 

@@ -18,11 +18,14 @@ style_metro(
   label_arrow_dash_array = "2",
   arc_radius = 15,
   bridge_color = "white",
-  minimal_width = NULL
+  minimal_width = NULL,
+  node_size_range = NULL,
+  edge_width_range = NULL
 )
 }
 \arguments{
-\item{scale}{The size of a single grid cell.}
+\item{scale}{Half the distance, in pixels, between neighboring rows and
+between neighboring lanes (columns): both are \code{2 * scale} apart.}
 
 \item{node_radius}{The radius of a node, in pixels: of a circle, and the
 size that other shapes (see \code{node_shape} of \code{\link[=dag_layers]{dag_layers()}}) are drawn to
@@ -65,6 +68,21 @@ label, measured from its text. A number is dagviz's rule instead: the
 plot is at least that wide in pixels (dagviz uses \code{500}) and twice as
 wide as the right-most label's start, since an SVG can't measure its
 own text. The plot is then often much wider than the graph.}
+
+\item{node_size_range, edge_width_range}{The smallest and largest node
+radius and edge width, in pixels, when \code{node_size} and \code{edge_width} (see
+\code{\link[=dag_layers]{dag_layers()}}) draw them from a column. Rows and lanes are \code{2 * scale}
+apart, and the plot ends \code{scale} pixels from the nodes' centers, so a
+radius may not exceed \code{scale}, nor a width \code{scale / 2}. \code{NULL} (the
+default) is from half to one and a half times \code{node_radius}, and from
+half to two and a half times \code{edge_stroke_width}, kept within those
+limits. The limit is for circles: a triangle or diamond reaches up to
+about 1.6 times further, as for \code{node_radius}, so the biggest of them
+in the first or last row may be cut off unless \code{scale} is raised.
+Neighboring rows are \code{2 * scale} apart, so two nodes of the largest
+radius in them leave only \code{2 * scale - 2 * max} px for the line between
+them (2 px by default), too little to see. A smaller maximum, or a larger
+\code{scale}, leaves room.}
 }
 \value{
 A \code{dag_style_metro} object.

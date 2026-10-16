@@ -17,5 +17,5 @@
     Code
       print(lay)
     Output
-      <dag_layout> 2 nodes, 0 edges, 1 columns
+      <dag_layout> 2 nodes, 0 edges, 1 column
 

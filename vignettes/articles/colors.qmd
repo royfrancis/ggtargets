@@ -70,7 +70,7 @@ dag <- as_dag(
 
 ## The default palette
 
-With `node_color = NULL` (the default), each lane gets its own color from `metro_palette()` - dagviz's palette, extended with generated colors so that no color is ever repeated, no legend:
+With `node_color = NULL` (the default), each node gets its own color from `metro_palette()` - dagviz's palette, extended with generated colors so that no color is ever repeated. There is no legend:
 
 ```{r}
 #| label: default
@@ -87,9 +87,9 @@ ggplot2::ggplot(scales_df, ggplot2::aes(x, 1, fill = I(color))) +
   ggplot2::theme_void()
 ```
 
-The first 18 colors are dagviz's own; further colors are generated, so any number of lanes gets distinct colors. `metro_palette(n)` is always the first `n` colors of a longer palette, so a lane keeps its color as the graph grows.
+The first 18 colors are dagviz's own; further colors are generated, so any number of nodes gets distinct colors. `metro_palette(n)` is always the first `n` colors of a longer palette, so a node keeps its color as nodes are added after it.
 
-A palette you supply is never recycled either: if a vector (or function) gives fewer colors than there are lanes (or, with `node_color` set to a column, distinct values), `ggplot_dag()` stops with an error rather than reusing colors.
+A palette you supply is never recycled either: if a vector (or function) gives fewer colors than there are nodes (or, with `node_color` set to a column, distinct values), `ggplot_dag()` stops with an error rather than reusing colors.
 
 ## `targets` status colors
 
@@ -123,6 +123,8 @@ ggplot_dag(dag, node_color = "type")
 ```
 
 (A `type` column holding `targets`' own vertex types also sets the node shapes, see `targets_node_shapes()`. Coloring by that same column then merges the color and shape legends into one; coloring by another column, such as `status`, gives two.)
+
+A node with no value in the column (`NA`) takes no color from the palette. It is drawn gray, without a legend entry and without a warning, and so are the edges drawn in its color (a value that a named palette doesn't name is gray too, but with a warning). A column of nothing but `NA` has no legend at all.
 
 ## A named palette
 
@@ -207,7 +209,7 @@ ggplot_dag(
 
 ## Edge colors
 
-By default (`edge_color = "source"`), each edge is drawn in its source node's color - this is also the only mode that reproduces dagviz's picture pixel-for-pixel, since a shared lane's single line can only show one color.
+By default (`edge_color = "source"`), each edge is drawn in its source node's color.
 
 ```{r}
 #| label: edge-source

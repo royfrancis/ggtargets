@@ -1,8 +1,8 @@
 # ggtargets <a href='https://github.com/royfrancis/ggtargets'><img src='man/figures/logo-light.webp' align="right" height="200px" /></a>
 
-[![ci_linux](https://github.com/royfrancis/ggtargets/actions/workflows/linux.yml/badge.svg)](https://github.com/royfrancis/ggtargets/actions/workflows/linux.yml) [![ci_windows](https://github.com/royfrancis/ggtargets/actions/workflows/windows.yml/badge.svg)](https://github.com/royfrancis/ggtargets/actions/workflows/windows.yml) [![codecov](https://codecov.io/gh/royfrancis/ggtargets/branch/main/graph/badge.svg?token=4DOQ8HNQFK)](https://app.codecov.io/gh/royfrancis/ggtargets/) ![status: experimental](https://github.com/GIScience/badges/raw/master/status/experimental.svg)
+[![ci_linux](https://github.com/royfrancis/ggtargets/actions/workflows/linux.yml/badge.svg)](https://github.com/royfrancis/ggtargets/actions/workflows/linux.yml) [![ci_windows](https://github.com/royfrancis/ggtargets/actions/workflows/windows.yml/badge.svg)](https://github.com/royfrancis/ggtargets/actions/workflows/windows.yml) [![codecov](https://codecov.io/gh/royfrancis/ggtargets/branch/main/graph/badge.svg?token=4DOQ8HNQFK)](https://app.codecov.io/gh/royfrancis/ggtargets/) [![r-universe status](https://royfrancis.r-universe.dev/ggtargets/badges/checks)](https://royfrancis.r-universe.dev/ggtargets) ![status: experimental](https://github.com/GIScience/badges/raw/master/status/experimental.svg)
 
-**ggtargets** creates metro-style diagrams of [targets](https://docs.ropensci.org/targets/) pipelines dependency graph and other directed acyclic graphs using ggplot2.
+**ggtargets** creates metro-style diagrams of the dependency graphs of [targets](https://docs.ropensci.org/targets/) pipelines, and of other directed acyclic graphs, using ggplot2.
 
 ![](man/figures/README-hero-1.png)
 
@@ -80,6 +80,35 @@ withr::with_dir(withr::local_tempdir(), {
 
 ![](man/figures/README-targets-shapes-1.png)
 
+A pipeline of many targets is easier to read as a few stages. `targets` has no tag field for a target, but its `description` is free text, so a stage can go there (`tar_option_set(description = )` sets it for a block of targets). `collapse_by = "description"` merges the targets that share one into a node, with their number in the label, and `node_size` and `edge_width` show those counts:
+
+``` r
+withr::with_dir(withr::local_tempdir(), {
+  targets::tar_script({
+    tar_option_set(description = "ingest")
+    ingest <- list(
+      tar_target(raw_data, 1:10),
+      tar_target(clean_data, raw_data * 2),
+      tar_target(features, clean_data + 1)
+    )
+    tar_option_set(description = "model")
+    model <- list(
+      tar_target(fit_mean, mean(features)),
+      tar_target(fit_median, median(features))
+    )
+    tar_option_set(description = "report")
+    report <- list(tar_target(report_text, c(fit_mean, fit_median)))
+    tar_option_set(description = character(0))
+    c(ingest, model, report)
+  })
+  tar_ggplot(collapse_by = "description", node_size = "n", edge_width = "n")
+})
+```
+
+![](man/figures/README-targets-stages-1.png)
+
+See the "Collapsing a pipeline by stage" section of `?tar_ggplot` for the details, and for a column of your own instead of `description`.
+
 ## Example: any directed acyclic graph
 
 `ggplot_dag()`/`as_dag()` work with any edge-list data frame, not just a `targets` pipeline:
@@ -93,7 +122,7 @@ ggplot_dag(as_dag(edges, nodes = nodes), node_color = "type")
 ![](man/figures/README-dataframe-example-1.png)
 
 See `vignette("ggtargets")` to get started, and `browseVignettes("ggtargets")` for more (customizing the style, other inputs, how the layout works). A few more articles
-(colors, working with ggplot2, a gallery) are pkgdown-only for now, since the package doesn't ship them to keep install-time dependencies light - build the site locally with `pkgdown::build_site()` to read them.
+(collapsing a pipeline, colors, working with ggplot2, a gallery) are pkgdown-only for now, since the package doesn't ship them to keep install-time dependencies light - build the site locally with `pkgdown::build_site()` to read them.
 
 ## Acknowledgements
 

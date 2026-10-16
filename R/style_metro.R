@@ -223,13 +223,8 @@ metro_geometry <- function(cells, columns, style) {
     nodes_cells$label,
     paste(nodes_cells$row, nodes_cells$column)
   )
-  owner_color <- stats::setNames(
-    nodes_cells$color,
-    paste(nodes_cells$row, nodes_cells$column)
-  )
   owner_of <- function(row, col) {
-    key <- paste(row, col)
-    list(label = unname(owner_label[key]), color = unname(owner_color[key]))
+    list(label = unname(owner_label[paste(row, col)]))
   }
 
   cells$node_column <- node_col_by_row[as.character(cells$row)]
@@ -319,7 +314,6 @@ metro_geometry <- function(cells, columns, style) {
     )
   }
 
-  # ---- arcs -----------------------------------------------------------
   # ---- arcs + left/right hlines + bridges --------------------------------
   # dagviz's render() walks one row's columns left to right and draws each
   # side's arcs *as it encounters them*, only emitting that side's hline
@@ -626,7 +620,8 @@ metro_geometry <- function(cells, columns, style) {
 #' of [dag_layers()]), thick colored edges with rounded bends, and labels to
 #' the right.
 #'
-#' @param scale The size of a single grid cell.
+#' @param scale Half the distance, in pixels, between neighboring rows and
+#'   between neighboring lanes (columns): both are `2 * scale` apart.
 #' @param node_radius The radius of a node, in pixels: of a circle, and the
 #'   size that other shapes (see `node_shape` of [dag_layers()]) are drawn to
 #'   match. A triangle or diamond reaches further from its center than a
@@ -660,6 +655,20 @@ metro_geometry <- function(cells, columns, style) {
 #'   plot is at least that wide in pixels (dagviz uses `500`) and twice as
 #'   wide as the right-most label's start, since an SVG can't measure its
 #'   own text. The plot is then often much wider than the graph.
+#' @param node_size_range,edge_width_range The smallest and largest node
+#'   radius and edge width, in pixels, when `node_size` and `edge_width` (see
+#'   [dag_layers()]) draw them from a column. Rows and lanes are `2 * scale`
+#'   apart, and the plot ends `scale` pixels from the nodes' centers, so a
+#'   radius may not exceed `scale`, nor a width `scale / 2`. `NULL` (the
+#'   default) is from half to one and a half times `node_radius`, and from
+#'   half to two and a half times `edge_stroke_width`, kept within those
+#'   limits. The limit is for circles: a triangle or diamond reaches up to
+#'   about 1.6 times further, as for `node_radius`, so the biggest of them
+#'   in the first or last row may be cut off unless `scale` is raised.
+#'   Neighboring rows are `2 * scale` apart, so two nodes of the largest
+#'   radius in them leave only `2 * scale - 2 * max` px for the line between
+#'   them (2 px by default), too little to see. A smaller maximum, or a larger
+#'   `scale`, leaves room.
 #' @return A `dag_style_metro` object.
 #' @export
 #' @examples
@@ -680,11 +689,15 @@ style_metro <- function(
   label_arrow_dash_array = "2",
   arc_radius = 15,
   bridge_color = "white",
-  minimal_width = NULL
+  minimal_width = NULL,
+  node_size_range = NULL,
+  edge_width_range = NULL
 ) {
-  # Map dagviz's SVG-specific StyleConfig values to R equivalents (Section
-  # 5); an already-R-native value (e.g. a user passing "sans" directly)
-  # passes through unchanged.
+  check_size_range(node_size_range, scale, "node_size_range", "`scale`")
+  check_size_range(edge_width_range, scale / 2, "edge_width_range", "`scale / 2`")
+  # Map dagviz's SVG-specific StyleConfig values to R equivalents; an
+  # already-R-native value (e.g. a user passing "sans" directly) passes
+  # through unchanged.
   if (identical(label_font_family, "sans-serif")) {
     label_font_family <- "sans"
   }
@@ -715,7 +728,9 @@ style_metro <- function(
     label_arrow_dash_array = label_arrow_dash_array,
     arc_radius = arc_radius,
     bridge_color = bridge_color,
-    minimal_width = minimal_width
+    minimal_width = minimal_width,
+    node_size_range = node_size_range,
+    edge_width_range = edge_width_range
   )
   structure(params, class = "dag_style_metro")
 }
@@ -732,6 +747,8 @@ style_metro <- function(
 #' @return A `dag_layout`: a classed list of
 #'   * `nodes`: one row per node, in row order - `name`, `label`, `row`,
 #'     `col`, `x`, `y`, `color_index`, plus the `dag`'s extra node columns.
+#'     Those can't be named `row`, `col`, `x`, `y` or `color_index`: the
+#'     layout needs these, so such a column is an error.
 #'   * `segments`: straight lines, `layer` (`"leader"`, `"vline"`,
 #'     `"bridge"` or `"hline"`), `x`, `y`, `xend`, `yend`, `from`, `to`
 #'     and `order` (dagviz's draw order, shared with `arcs`).
@@ -741,7 +758,12 @@ style_metro <- function(
 #'   * `edge_paths`: one full point path per graph edge - `from`, `to`,
 #'     `piece` (`"vline"`, `"arc"` or `"hline"`), `x`, `y`, and `order`
 #'     (point order along the path) - used for `edge_color` other than
-#'     `"source"`, and for highlighting paths.
+#'     `"source"`, for any `edge_width`, and for highlighting paths.
+#'   * `edges`: the `dag`'s `edges` as they are - `from`, `to`, plus any
+#'     extra edge columns, such as the `n` of [dag_collapse()], which
+#'     `edge_width` of [dag_layers()] can name. (They are kept apart from
+#'     `edge_paths`, so that no column of yours can overwrite a coordinate
+#'     there.)
 #'   * `viewbox`: a list of `left`, `top`, `bottom`, `right`, `width` and
 #'     `height`.
 #'   * `style`: the [style_metro()] object.
@@ -752,6 +774,14 @@ style_metro <- function(
 #' print(lay)
 #' lay$nodes
 dag_layout <- function(dag, style = style_metro()) {
+  if (!inherits(dag, "dag")) {
+    stop(
+      "dag_layout(): `dag` must be a dag, from as_dag() or tar_dag().",
+      call. = FALSE
+    )
+  }
+  # a dag edited after as_dag(), or built by hand, never met that check
+  check_node_columns(names(dag$nodes), "dag_layout()", "`dag$nodes`")
   order <- metro_order(dag$nodes$name, dag$edges)
   lanes <- metro_lanes(dag$nodes$name, dag$edges, order)
   geom <- metro_geometry(lanes$cells, lanes$columns, style)
@@ -796,6 +826,7 @@ dag_layout <- function(dag, style = style_metro()) {
       arcs = geom$arcs,
       labels = geom$labels,
       edge_paths = geom$edge_paths,
+      edges = dag$edges,
       viewbox = geom$viewbox,
       style = style
     ),
@@ -848,6 +879,13 @@ label_width_px <- function(labels, family, size) {
 #' `geom_path()` draws groups in the order they appear in its data, so this
 #' builds one data frame - one hline as a 2-point path, one arc as its
 #' already-computed point path - sorted by that shared `order`.
+#' @param hline The layout's `"hline"` segments.
+#' @param arcs The layout's `arcs`.
+#' @param node_colors The `colors` element returned by [resolve_node_color()]
+#'   (a vector named by node name); each path takes the color of the node it
+#'   starts from.
+#' @return A data frame with one row per point: `x`, `y`, `group` (the
+#'   drawing order of the path, as an integer), `order` and `color_`.
 #' @keywords internal
 metro_hline_arc_paths <- function(hline, arcs, node_colors) {
   empty <- data.frame(
@@ -898,6 +936,45 @@ metro_hline_arc_paths <- function(hline, arcs, node_colors) {
   combined
 }
 
+#' The width of each bridge, from the edges it lies under
+#'
+#' A bridge is the white gap under a horizontal line, wide enough to cut
+#' the lines that cross it. It is one segment per side of a row, from the
+#' farthest arc to the node, and so lies under the hline of every edge that
+#' enters the row from that side. Its width is that of the widest of them,
+#' plus a margin on each side (as for a constant edge width: the
+#' narrower of the edge and the node border), so that the white shows
+#' around the widest line, not around a narrower one.
+#'
+#' @param bridge The layout's `"bridge"` segments.
+#' @param edge_paths The layout's `edge_paths`.
+#' @param widths The width of each edge in pixels, named `"from|to"` (see
+#'   [resolve_edge_width()]).
+#' @param style A [style_metro()] object.
+#' @return The width of each row of `bridge`, in pixels.
+#' @keywords internal
+metro_bridge_widths <- function(bridge, edge_paths, widths, style) {
+  hline <- edge_paths[edge_paths$piece == "hline", ]
+  key <- paste(hline$from, hline$to, sep = "|")
+  by_edge <- split(seq_len(nrow(hline)), factor(key, levels = unique(key)))
+  y <- vapply(by_edge, function(i) hline$y[[i[[1L]]]], numeric(1))
+  low <- vapply(by_edge, function(i) min(hline$x[i]), numeric(1))
+  high <- vapply(by_edge, function(i) max(hline$x[i]), numeric(1))
+  width <- unname(widths[names(by_edge)])
+  tolerance <- 1e-6
+  vapply(
+    seq_len(nrow(bridge)),
+    function(b) {
+      under <- abs(y - bridge$y[[b]]) < tolerance &
+        low >= min(bridge$x[[b]], bridge$xend[[b]]) - tolerance &
+        high <= max(bridge$x[[b]], bridge$xend[[b]]) + tolerance
+      widest <- max(width[under], 0)
+      widest + 2 * min(widest, style$node_stroke_width)
+    },
+    numeric(1)
+  )
+}
+
 #' Draw a DAG layout as ggplot2 layers
 #'
 #' Returns a list of ggplot2 layers in draw order, ready to add to a
@@ -906,9 +983,10 @@ metro_hline_arc_paths <- function(hline, arcs, node_colors) {
 #' @param layout A `dag_layout`, as returned by [dag_layout()].
 #' @param node_color,palette,edge_color Color resolution arguments: see
 #'   the pkgdown site's Colors article for the full set of rules and
-#'   examples. `palette` must supply at least one color per lane (or per
+#'   examples. `palette` must supply at least one color per node (or per
 #'   distinct value of a `node_color` column); colors are never recycled,
-#'   and the default [metro_palette()] never repeats one.
+#'   and the default [metro_palette()] never repeats one. `palette = NULL`
+#'   is the same as the default, [metro_palette()].
 #' @param node_shape The shape of a node: `NULL` (the default), a node
 #'   column name, or a single shape name. A shape is `"circle"`, `"square"`,
 #'   `"diamond"`, `"triangle"` or `"triangle_down"`. `NULL` follows the
@@ -923,6 +1001,31 @@ metro_hline_arc_paths <- function(hline, arcs, node_colors) {
 #'   named character vector (value -> shape), or an unnamed one of shapes
 #'   assigned to the distinct values in order, which must supply at least
 #'   one per value. Defaults to [targets_node_shapes()].
+#' @param node_size The size of a node: `NULL` (the default, every node has
+#'   the radius `node_radius`), or the name of a numeric node column, such as
+#'   the `n` that [dag_collapse()] adds (or `seconds` or `bytes` of a pipeline
+#'   from [tar_dag()]). The radius follows the square root of the value's
+#'   position between the smallest and the largest value, over the
+#'   `node_size_range` of [style_metro()], so that it is about the node's
+#'   area that grows in step with the value. A node with an `NA` value has the
+#'   radius `node_radius`. There is no
+#'   legend for the size: for a collapsed graph, the labels carry the count.
+#'   The largest radius a circle may have keeps it inside the grid, but a
+#'   triangle or diamond reaches further (see `node_radius` of
+#'   [style_metro()]), so with a `node_shape` of those, the biggest ones in the
+#'   first or last row, or the left column, may be cut off: raise `scale`.
+#'   Two of the biggest nodes in neighboring rows leave almost no room for
+#'   the line between them: see `node_size_range` of [style_metro()].
+#' @param edge_width The width of an edge: `NULL` (the default, every edge is
+#'   `edge_stroke_width` wide), or the name of a numeric column of the `dag`'s
+#'   `edges`, such as the `n` of [dag_collapse()]. The width grows linearly
+#'   with the value, over the `edge_width_range` of [style_metro()]. An edge
+#'   with an `NA` value is `edge_stroke_width`. In this metro layout the
+#'   edges from one node share a line, and so do those entering one node
+#'   from the same side, so a shared line is as wide as the widest edge it
+#'   carries. Each edge is then drawn whole (as for any `edge_color` but
+#'   `"source"`), the widest first, so that the narrower ones stay visible on
+#'   top; and each bridge is wide enough for the widest edge drawn over it.
 #' @param zoom Multiplier for node size, line widths and text size, to match
 #'   a panel sized at `zoom` px per data unit (see [ggplot_dag()]).
 #' @return A list of ggplot2 layers.
@@ -938,6 +1041,8 @@ dag_layers <- function(
   palette = metro_palette,
   node_shape = NULL,
   shapes = targets_node_shapes(),
+  node_size = NULL,
+  edge_width = NULL,
   zoom = 1
 ) {
   check_zoom(zoom)
@@ -967,6 +1072,11 @@ dag_layers <- function(
     nc
   }
   ns <- resolve_node_shape(layout$nodes, node_shape, shapes)
+  radius <- resolve_node_size(layout$nodes, node_size, style)
+  ew <- resolve_edge_width(layout$edges, edge_width, style)
+  # An edge_width means drawing each edge whole, so what a shared line
+  # carries is drawn at the width of its widest edge: see `edge_width`.
+  by_source <- identical(edge_color, "source") && is.null(ew)
   # Node sizes, line widths and text are in absolute units, unlike the layout
   # (data units), so `zoom` must scale them by hand to match a panel that
   # ggplot_dag() has sized to `zoom` px per data unit.
@@ -992,7 +1102,7 @@ dag_layers <- function(
   # dagviz's own draw order is leaders, vlines, bridges, hlines+arcs, nodes,
   # labels - the bridges must come *after* the vlines, or a vline painted
   # on top erases the white crossing-gap a bridge is there to create.
-  if (identical(edge_color, "source")) {
+  if (by_source) {
     vline <- seg[seg$layer == "vline", ]
     if (nrow(vline) > 0) {
       vline$color_ <- unname(nc$colors[vline$from])
@@ -1024,39 +1134,61 @@ dag_layers <- function(
         color_ = unname(ec[paste(starts$from, starts$to, sep = "|")]),
         stringsAsFactors = FALSE
       )
-      layers[[length(layers) + 1]] <- ggplot2::geom_segment(
-        data = vline_df,
-        ggplot2::aes(
-          x = .data$x,
-          y = .data$y,
-          xend = .data$xend,
-          yend = .data$yend,
-          color = I(.data$color_)
-        ),
-        linewidth = px(style$edge_stroke_width)
+      vline_mapping <- ggplot2::aes(
+        x = .data$x,
+        y = .data$y,
+        xend = .data$xend,
+        yend = .data$yend,
+        color = I(.data$color_)
+      )
+      vline_args <- list(data = vline_df, mapping = vline_mapping)
+      if (is.null(ew)) {
+        vline_args$linewidth <- px(style$edge_stroke_width)
+      } else {
+        # widest first: on a line shared by several edges, a narrower
+        # edge drawn after a wider one stays visible
+        vline_df$lw_ <- px(unname(ew[paste(starts$from, starts$to, sep = "|")]))
+        vline_args$data <- vline_df[order(-vline_df$lw_), ]
+        vline_args$mapping$linewidth <- ggplot2::aes(
+          linewidth = I(.data$lw_)
+        )$linewidth
+      }
+      layers[[length(layers) + 1]] <- do.call(
+        ggplot2::geom_segment,
+        vline_args
       )
     }
   }
 
   bridge <- seg[seg$layer == "bridge", ]
   if (nrow(bridge) > 0) {
-    layers[[length(layers) + 1]] <- ggplot2::geom_segment(
+    bridge_mapping <- ggplot2::aes(
+      x = .data$x,
+      y = .data$y,
+      xend = .data$xend,
+      yend = .data$yend
+    )
+    bridge_args <- list(
       data = bridge,
-      ggplot2::aes(
-        x = .data$x,
-        y = .data$y,
-        xend = .data$xend,
-        yend = .data$yend
-      ),
-      color = style$bridge_color,
-      linewidth = px(
+      mapping = bridge_mapping,
+      color = style$bridge_color
+    )
+    if (is.null(ew)) {
+      bridge_args$linewidth <- px(
         style$edge_stroke_width +
           2 * min(style$edge_stroke_width, style$node_stroke_width)
       )
-    )
+    } else {
+      bridge$lw_ <- px(metro_bridge_widths(bridge, layout$edge_paths, ew, style))
+      bridge_args$data <- bridge
+      bridge_args$mapping$linewidth <- ggplot2::aes(
+        linewidth = I(.data$lw_)
+      )$linewidth
+    }
+    layers[[length(layers) + 1]] <- do.call(ggplot2::geom_segment, bridge_args)
   }
 
-  if (identical(edge_color, "source")) {
+  if (by_source) {
     combined <- metro_hline_arc_paths(
       seg[seg$layer == "hline", ],
       layout$arcs,
@@ -1079,7 +1211,13 @@ dag_layers <- function(
     if (nrow(ah) > 0) {
       key <- paste(ah$from, ah$to, sep = "|")
       ah$color_ <- unname(ec[key])
-      ah <- ah[order(key, ah$order), ]
+      if (is.null(ew)) {
+        ah <- ah[order(key, ah$order), ]
+      } else {
+        # widest first, as for the vlines
+        ah$lw_ <- px(unname(ew[key]))
+        ah <- ah[order(-ah$lw_, key, ah$order), ]
+      }
       # see metro_hline_arc_paths(): re-encode as an integer in draw order,
       # since GeomPath re-sorts by `group` (alphabetically, for a
       # character group) before drawing.
@@ -1087,16 +1225,21 @@ dag_layers <- function(
         paste(ah$from, ah$to, sep = "|"),
         unique(paste(ah$from, ah$to, sep = "|"))
       )
-      layers[[length(layers) + 1]] <- ggplot2::geom_path(
-        data = ah,
-        ggplot2::aes(
-          x = .data$x,
-          y = .data$y,
-          group = .data$group_,
-          color = I(.data$color_)
-        ),
-        linewidth = px(style$edge_stroke_width)
+      ah_mapping <- ggplot2::aes(
+        x = .data$x,
+        y = .data$y,
+        group = .data$group_,
+        color = I(.data$color_)
       )
+      ah_args <- list(data = ah, mapping = ah_mapping)
+      if (is.null(ew)) {
+        ah_args$linewidth <- px(style$edge_stroke_width)
+      } else {
+        ah_args$mapping$linewidth <- ggplot2::aes(
+          linewidth = I(.data$lw_)
+        )$linewidth
+      }
+      layers[[length(layers) + 1]] <- do.call(ggplot2::geom_path, ah_args)
     }
   }
 
@@ -1135,6 +1278,21 @@ dag_layers <- function(
     size = zoom * node_diameter / ggplot2::.pt,
     stroke = zoom * 2 * style$node_stroke_width / ggplot2::.stroke
   )
+  # With a node_size, each point has a size of its own (a constant `size`
+  # would override it). A legend key has no such column, so it is given the
+  # usual node size through `override.aes`.
+  key_aes <- list()
+  if (!is.null(radius)) {
+    node_diameters <- pmax(
+      2 * unname(radius[nodes$name]) - style$node_stroke_width,
+      1
+    )
+    pts$size_ <- zoom * node_diameters / ggplot2::.pt
+    node_args$data <- pts
+    node_args$size <- NULL
+    node_args$mapping$size <- ggplot2::aes(size = I(.data$size_))$size
+    key_aes <- list(size = zoom * node_diameter / ggplot2::.pt)
+  }
   if (ns$legend) {
     pts$shape_ <- factor(
       as.character(ns$values[nodes$name]),
@@ -1162,14 +1320,17 @@ dag_layers <- function(
   if (node_fill$legend) {
     layers[[length(layers) + 1]] <- ggplot2::scale_fill_manual(
       values = node_fill$map,
+      na.value = value_na_color,
       name = node_fill$title,
       breaks = if (merged) ns$breaks else names(node_fill$map),
       labels = if (merged) ns$labels else ggplot2::waiver(),
       guide = if (two) {
         ggplot2::guide_legend(
           order = 1L,
-          override.aes = list(shape = node_shape_pch[["circle"]])
+          override.aes = c(list(shape = node_shape_pch[["circle"]]), key_aes)
         )
+      } else if (length(key_aes) > 0L) {
+        ggplot2::guide_legend(override.aes = key_aes)
       } else {
         "legend"
       }
@@ -1187,7 +1348,7 @@ dag_layers <- function(
       } else {
         ggplot2::guide_legend(
           order = 2L,
-          override.aes = list(fill = node_shape_key_fill)
+          override.aes = c(list(fill = node_shape_key_fill), key_aes)
         )
       }
     )

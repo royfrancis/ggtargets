@@ -16,6 +16,8 @@ A \code{dag_layout}: a classed list of
 \itemize{
 \item \code{nodes}: one row per node, in row order - \code{name}, \code{label}, \code{row},
 \code{col}, \code{x}, \code{y}, \code{color_index}, plus the \code{dag}'s extra node columns.
+Those can't be named \code{row}, \code{col}, \code{x}, \code{y} or \code{color_index}: the
+layout needs these, so such a column is an error.
 \item \code{segments}: straight lines, \code{layer} (\code{"leader"}, \code{"vline"},
 \code{"bridge"} or \code{"hline"}), \code{x}, \code{y}, \code{xend}, \code{yend}, \code{from}, \code{to}
 and \code{order} (dagviz's draw order, shared with \code{arcs}).
@@ -25,7 +27,12 @@ and \code{order}.
 \item \code{edge_paths}: one full point path per graph edge - \code{from}, \code{to},
 \code{piece} (\code{"vline"}, \code{"arc"} or \code{"hline"}), \code{x}, \code{y}, and \code{order}
 (point order along the path) - used for \code{edge_color} other than
-\code{"source"}, and for highlighting paths.
+\code{"source"}, for any \code{edge_width}, and for highlighting paths.
+\item \code{edges}: the \code{dag}'s \code{edges} as they are - \code{from}, \code{to}, plus any
+extra edge columns, such as the \code{n} of \code{\link[=dag_collapse]{dag_collapse()}}, which
+\code{edge_width} of \code{\link[=dag_layers]{dag_layers()}} can name. (They are kept apart from
+\code{edge_paths}, so that no column of yours can overwrite a coordinate
+there.)
 \item \code{viewbox}: a list of \code{left}, \code{top}, \code{bottom}, \code{right}, \code{width} and
 \code{height}.
 \item \code{style}: the \code{\link[=style_metro]{style_metro()}} object.

@@ -101,8 +101,13 @@ metro_palette <- function(n) {
   kept
 }
 
-#' @keywords internal
+# Whether `x` is a color R understands. `NA` is not one here: col2rgb() takes
+# it for transparent white, but as `node_color` or `edge_color` it would give
+# every node or edge a missing color, which ggplot2 drops without a word.
 is_valid_color <- function(x) {
+  if (anyNA(x)) {
+    return(FALSE)
+  }
   tryCatch(
     {
       grDevices::col2rgb(x)
@@ -112,6 +117,10 @@ is_valid_color <- function(x) {
   )
 }
 
+# The color of a value that has none: a missing value, or one that a named
+# palette doesn't name.
+value_na_color <- "#94a4ac"
+
 #' Map a column's distinct values to a palette
 #'
 #' Used by [resolve_node_color()] for a node column: distinct
@@ -120,14 +129,22 @@ is_valid_color <- function(x) {
 #' set to gray and a warning; an unnamed vector that is too short is an
 #' error; a function is called with the number of distinct values.
 #'
+#' A missing value (`NA`) is not a value: it takes no color from `palette`,
+#' is not in `map` (so it has no legend entry, as for shapes), and is the
+#' same gray as an unmatched value, but without the warning. Its color is
+#' always defined, because the edges drawn in a node's color (`"source"`,
+#' `"target"`) would otherwise be `NA`, and ggplot2 drops a line with a missing
+#' color without a word.
+#'
 #' @param values The raw column values (one per row, possibly repeated).
 #' @param palette A `function(n)`, an unnamed color vector, or a named
 #'   color vector matched by value.
-#' @return A list with `colors` (one per element of `values`) and `map`
-#'   (a named vector, value -> color).
+#' @return A list with `colors` (one per element of `values`, never `NA`) and
+#'   `map` (a named vector, value -> color, with no entry for `NA`).
 #' @keywords internal
 resolve_value_palette <- function(values, palette) {
   lv <- if (is.factor(values)) levels(values) else unique(as.character(values))
+  lv <- lv[!is.na(lv)]
   n <- length(lv)
   if (is.function(palette)) {
     colors <- palette(n)
@@ -142,7 +159,7 @@ resolve_value_palette <- function(values, palette) {
     map <- stats::setNames(unname(palette[lv]), lv)
     unmatched <- lv[is.na(map)]
     if (length(unmatched) > 0) {
-      map[is.na(map)] <- "#94a4ac"
+      map[is.na(map)] <- value_na_color
       warning(
         "Values with no match in `palette` set to gray: ",
         paste(unmatched, collapse = ", "),
@@ -158,7 +175,10 @@ resolve_value_palette <- function(values, palette) {
     }
     map <- stats::setNames(palette[seq_len(n)], lv)
   }
-  list(colors = unname(map[as.character(values)]), map = map)
+  # by position, not by name: a name subscript of "" never matches
+  colors <- unname(map[match(as.character(values), names(map))])
+  colors[is.na(values)] <- value_na_color
+  list(colors = colors, map = map)
 }
 
 #' Resolve **node_color** into one color per node
@@ -168,8 +188,9 @@ resolve_value_palette <- function(values, palette) {
 #' @param node_color `NULL`, a column name, or a single color.
 #' @param palette A `function(n)`, an unnamed color vector, or (when
 #'   `node_color` names a column) a named color vector. With
-#'   `node_color = NULL`, `n` is the number of lanes (`color_index`
-#'   values) and too few colors is an error.
+#'   `node_color = NULL`, each node takes the color of its `color_index`, `n`
+#'   is the number of those indices (one per node in the metro layout), and
+#'   too few colors is an error.
 #' @return A list with `colors` (named by node `name`), `legend` (whether
 #'   to show a fill legend), `title` (the legend title, or `NULL`), and,
 #'   for a column, `values` (the column, named by node) and `map` (value
@@ -177,11 +198,12 @@ resolve_value_palette <- function(values, palette) {
 #' @keywords internal
 resolve_node_color <- function(nodes, node_color, palette) {
   if (is.null(node_color)) {
-    # one color per lane (color_index), not per node
+    # one color per color_index (the metro layout gives each node its own),
+    # not per value of a column
     n_colors <- max(-1L, nodes$color_index) + 1L
     pal <- if (is.function(palette)) palette(n_colors) else palette
     if (length(pal) < n_colors) {
-      stop("`palette` has fewer colors than there are lanes.", call. = FALSE)
+      stop("`palette` has fewer colors than there are nodes.", call. = FALSE)
     }
     colors <- pal[nodes$color_index + 1]
     return(list(
@@ -200,10 +222,12 @@ resolve_node_color <- function(nodes, node_color, palette) {
   }
   if (node_color %in% names(nodes)) {
     res <- resolve_value_palette(nodes[[node_color]], palette)
+    # a column of nothing but NA has no values to show in a legend
+    has_values <- length(res$map) > 0L
     return(list(
       colors = stats::setNames(res$colors, nodes$name),
-      legend = TRUE,
-      title = node_color,
+      legend = has_values,
+      title = if (has_values) node_color,
       values = stats::setNames(nodes[[node_color]], nodes$name),
       map = res$map
     ))

@@ -11,6 +11,8 @@ ggplot_dag(
   palette = metro_palette,
   node_shape = NULL,
   shapes = targets_node_shapes(),
+  node_size = NULL,
+  edge_width = NULL,
   style = style_metro(),
   fixed_size = TRUE,
   zoom = 1
@@ -20,8 +22,7 @@ ggplot_dag(
 \item{x}{A \code{dag_layout} (from \code{\link[=dag_layout]{dag_layout()}}) or a \code{dag} (from
 \code{\link[=as_dag]{as_dag()}} or \code{\link[=tar_dag]{tar_dag()}}).}
 
-\item{node_color, palette, edge_color, node_shape, shapes}{Passed to
-\code{\link[=dag_layers]{dag_layers()}}.}
+\item{node_color, palette, edge_color, node_shape, shapes, node_size, edge_width}{Passed to \code{\link[=dag_layers]{dag_layers()}}.}
 
 \item{style}{A \code{\link[=style_metro]{style_metro()}} object, used to lay out \code{x} when it is a
 \code{dag} (ignored for a \code{dag_layout}, which carries its own).}
@@ -38,8 +39,8 @@ A \code{ggplot} object.
 }
 \description{
 \code{ggplot_dag()} is \code{ggplot() + dag_layers(lay, ...) + dag_theme()}.
-Given a \code{dag} instead of a \code{dag_layout}, it lays it out with
-\code{\link[=style_metro]{style_metro()}} first.
+Given a \code{dag} instead of a \code{dag_layout}, it first lays it out with
+\code{\link[=dag_layout]{dag_layout()}}, in the \code{style} you give it (\code{\link[=style_metro]{style_metro()}} by default).
 }
 \details{
 By default (\code{fixed_size = TRUE}) the panel gets an absolute size of
@@ -75,4 +76,16 @@ ggplot_dag(
   shapes = c("diamond", "circle", "triangle")
 )
 dag_size(ggplot_dag(dag))
+
+# a collapsed graph, with node size and edge width showing the counts
+nodes <- data.frame(
+  name = c("raw", "clean", "tidy", "fit", "eval", "report"),
+  stage = c("data", "data", "data", "model", "model", "report")
+)
+edges <- data.frame(
+  from = c("raw", "clean", "tidy", "tidy", "fit", "eval"),
+  to = c("clean", "tidy", "fit", "eval", "eval", "report")
+)
+small <- dag_collapse(as_dag(edges, nodes = nodes), "stage")
+ggplot_dag(small, node_color = "stage", node_size = "n", edge_width = "n")
 }

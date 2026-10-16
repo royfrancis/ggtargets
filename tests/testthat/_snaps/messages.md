@@ -87,6 +87,14 @@
       Error:
       ! as_dag(): node names can't contain "|" or a carriage return; `x$from` has: "a\rb"
 
+---
+
+    Code
+      as_dag(data.frame(from = c("a", ""), to = c("b", "c")))
+    Condition
+      Error:
+      ! as_dag(): `x$from` has empty ("") node name(s).
+
 # metro_palette() messages
 
     Code
@@ -119,6 +127,14 @@
       Error:
       ! `n` must be a single non-negative whole number.
 
+---
+
+    Code
+      metro_palette(19)
+    Condition
+      Error:
+      ! Could not generate that many distinct colors.
+
 # style_metro() unknown argument message
 
     Code
@@ -142,7 +158,7 @@
       NULL, "red")
     Condition
       Error:
-      ! `palette` has fewer colors than there are lanes.
+      ! `palette` has fewer colors than there are nodes.
 
 ---
 
@@ -175,6 +191,46 @@
     Condition
       Error:
       ! `palette` has fewer colors than there are distinct values.
+
+---
+
+    Code
+      resolve_value_palette(c("x", "y", "z"), function(n) c("red", "blue"))
+    Condition
+      Error:
+      ! `palette` returned fewer colors than there are distinct values.
+
+---
+
+    Code
+      resolve_node_color(nodes, 123, metro_palette)
+    Condition
+      Error:
+      ! `node_color` must be NULL, a column name, or a single color.
+
+---
+
+    Code
+      resolve_node_color(nodes, NA_character_, metro_palette)
+    Condition
+      Error:
+      ! `node_color` ('NA') is not a node column name or a valid color.
+
+---
+
+    Code
+      resolve_edge_color(edge_paths, 123, c(a = "red", b = "green"))
+    Condition
+      Error:
+      ! `edge_color` must be "source", "target", or a single color.
+
+---
+
+    Code
+      resolve_edge_color(edge_paths, NA_character_, c(a = "red", b = "green"))
+    Condition
+      Error:
+      ! `edge_color` ('NA') is not "source", "target", or a valid color.
 
 # resolve_node_shape() messages
 
@@ -256,11 +312,255 @@
       Error:
       ! `zoom` must be a single positive number.
 
-# tar_dag()/tar_ggplot() outside a targets project message
+---
+
+    Code
+      invisible(ggplot_dag(d, fixed_size = FALSE, zoom = 2))
+    Condition
+      Warning:
+      `zoom` is ignored when `fixed_size = FALSE`.
+
+# dag_layout() input message
+
+    Code
+      dag_layout(edges)
+    Condition
+      Error:
+      ! dag_layout(): `dag` must be a dag, from as_dag() or tar_dag().
+
+---
+
+    Code
+      ggplot_dag(edges)
+    Condition
+      Error:
+      ! dag_layout(): `dag` must be a dag, from as_dag() or tar_dag().
+
+# tar_dag() message when targets is not installed
 
     Code
       tar_dag()
     Condition
       Error:
-      ! could not find file _targets.R. Main functions like tar_make() require a target script file (default: _targets.R) to define the pipeline. Functions tar_edit() and tar_script() can help. 
+      ! This needs the targets package. Install it with install.packages("targets").
+
+# dag_collapse() messages
+
+    Code
+      dag_collapse(data.frame(from = "a", to = "b"), "g")
+    Condition
+      Error:
+      ! dag_collapse(): `dag` must be a dag, from as_dag() or tar_dag().
+
+---
+
+    Code
+      dag_collapse(d, 1)
+    Condition
+      Error:
+      ! dag_collapse(): `by` must be a single node column name.
+
+---
+
+    Code
+      dag_collapse(d, c("stage", "type"))
+    Condition
+      Error:
+      ! dag_collapse(): `by` must be a single node column name.
+
+---
+
+    Code
+      dag_collapse(d, "nope")
+    Condition
+      Error:
+      ! dag_collapse(): `by` ('nope') is not a node column; the columns are name, label, stage, type, seconds.
+
+---
+
+    Code
+      dag_collapse(d, "stage", label_n = NA)
+    Condition
+      Error:
+      ! dag_collapse(): `label_n` must be TRUE or FALSE.
+
+---
+
+    Code
+      dag_collapse(loop, "group")
+    Condition
+      Error:
+      ! dag_collapse(): collapsing by `group` creates a cycle: X -> Y -> X
+      Through these edges:
+        X -> Y: a -> b (and 1 more)
+        Y -> X: b -> c
+
+---
+
+    Code
+      dag_collapse(clash, "group")
+    Condition
+      Error:
+      ! dag_collapse(): `group` has value(s) that are also the name of a node with no `group`: b. They would be merged; rename one.
+
+---
+
+    Code
+      dag_collapse(bad, "group")
+    Condition
+      Error:
+      ! dag_collapse(): the values of `group` become node names, which can't contain "|" or a carriage return: "x|y", "z\rw"
+
+# node_size and edge_width messages
+
+    Code
+      ggplot_dag(d, node_size = "nope")
+    Condition
+      Error:
+      ! `node_size` ('nope') is not a node column.
+
+---
+
+    Code
+      ggplot_dag(d, node_size = "stage")
+    Condition
+      Error:
+      ! `node_size` ('stage') must be a numeric column.
+
+---
+
+    Code
+      ggplot_dag(d, node_size = 1)
+    Condition
+      Error:
+      ! `node_size` must be NULL or the name of a numeric node column.
+
+---
+
+    Code
+      ggplot_dag(d, node_size = c("n", "n"))
+    Condition
+      Error:
+      ! `node_size` must be NULL or the name of a numeric node column.
+
+---
+
+    Code
+      ggplot_dag(d, edge_width = "nope")
+    Condition
+      Error:
+      ! `edge_width` ('nope') is not an edge column.
+
+---
+
+    Code
+      ggplot_dag(d, edge_width = TRUE)
+    Condition
+      Error:
+      ! `edge_width` must be NULL or the name of a numeric edge column.
+
+---
+
+    Code
+      ggplot_dag(d, edge_width = "kind")
+    Condition
+      Error:
+      ! `edge_width` ('kind') must be a numeric column.
+
+---
+
+    Code
+      ggplot_dag(d, edge_width = "stage")
+    Condition
+      Error:
+      ! `edge_width` ('stage') is not an edge column.
+
+# style_metro()'s node_size_range and edge_width_range messages
+
+    Code
+      style_metro(node_size_range = 5)
+    Condition
+      Error:
+      ! `node_size_range` must be two positive numbers, smallest first, the largest at most `scale` (10).
+
+---
+
+    Code
+      style_metro(node_size_range = c(8, 4))
+    Condition
+      Error:
+      ! `node_size_range` must be two positive numbers, smallest first, the largest at most `scale` (10).
+
+---
+
+    Code
+      style_metro(node_size_range = c(0, 4))
+    Condition
+      Error:
+      ! `node_size_range` must be two positive numbers, smallest first, the largest at most `scale` (10).
+
+---
+
+    Code
+      style_metro(node_size_range = c(4, 11))
+    Condition
+      Error:
+      ! `node_size_range` must be two positive numbers, smallest first, the largest at most `scale` (10).
+
+---
+
+    Code
+      style_metro(node_size_range = c("a", "b"))
+    Condition
+      Error:
+      ! `node_size_range` must be two positive numbers, smallest first, the largest at most `scale` (10).
+
+---
+
+    Code
+      style_metro(node_size_range = c(4, NA))
+    Condition
+      Error:
+      ! `node_size_range` must be two positive numbers, smallest first, the largest at most `scale` (10).
+
+---
+
+    Code
+      style_metro(edge_width_range = c(1, 6))
+    Condition
+      Error:
+      ! `edge_width_range` must be two positive numbers, smallest first, the largest at most `scale / 2` (5).
+
+---
+
+    Code
+      style_metro(scale = 20, edge_width_range = c(1, 11))
+    Condition
+      Error:
+      ! `edge_width_range` must be two positive numbers, smallest first, the largest at most `scale / 2` (10).
+
+# reserved node column messages
+
+    Code
+      as_dag(edges, nodes = data.frame(name = c("a", "b"), x = 1:2))
+    Condition
+      Error:
+      ! as_dag(): `nodes` has column(s) named like the layout's own: x. These names are reserved (row, col, x, y, color_index); rename the column(s).
+
+---
+
+    Code
+      as_dag(edges, nodes = data.frame(name = c("a", "b"), y = 1:2, kind = "k",
+      color_index = 1:2))
+    Condition
+      Error:
+      ! as_dag(): `nodes` has column(s) named like the layout's own: y, color_index. These names are reserved (row, col, x, y, color_index); rename the column(s).
+
+---
+
+    Code
+      dag_layout(d)
+    Condition
+      Error:
+      ! dag_layout(): `dag$nodes` has column(s) named like the layout's own: row. These names are reserved (row, col, x, y, color_index); rename the column(s).
 

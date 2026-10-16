@@ -6,6 +6,19 @@
 \usage{
 metro_hline_arc_paths(hline, arcs, node_colors)
 }
+\arguments{
+\item{hline}{The layout's \code{"hline"} segments.}
+
+\item{arcs}{The layout's \code{arcs}.}
+
+\item{node_colors}{The \code{colors} element returned by \code{\link[=resolve_node_color]{resolve_node_color()}}
+(a vector named by node name); each path takes the color of the node it
+starts from.}
+}
+\value{
+A data frame with one row per point: \code{x}, \code{y}, \code{group} (the
+drawing order of the path, as an integer), \code{order} and \code{color_}.
+}
 \description{
 dagviz draws hlines and arcs interleaved, in one SVG group, in \code{order}.
 \code{geom_path()} draws groups in the order they appear in its data, so this

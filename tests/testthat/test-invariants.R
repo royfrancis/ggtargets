@@ -36,11 +36,13 @@ all_dags <- function() {
 test_that("edge_paths covers every edge exactly once, from source center to target center", {
   skip_on_cran()
   round_key <- function(x, y) paste(round(x, 6), round(y, 6))
+  pieces <- character(0)
 
   for (dag_name in names(.all_dags)) {
     d <- .all_dags[[dag_name]]
     lay <- dag_layout(d, style_metro())
     ep <- lay$edge_paths
+    pieces <- c(pieces, ep$piece)
     got_pairs <- unique(paste(ep$from, ep$to))
     exp_pairs <- paste(d$edges$from, d$edges$to)
     expect_setequal(got_pairs, exp_pairs) # the actual edge set, not just its size
@@ -141,6 +143,8 @@ test_that("edge_paths covers every edge exactly once, from source center to targ
       }
     }
   }
+  # the checks above run per piece, so the random DAGs must have all three
+  expect_true(all(c("vline", "arc", "hline") %in% pieces))
 })
 
 test_that("no two nodes share a row, and every row has exactly one node", {
@@ -198,4 +202,37 @@ test_that("layouts are deterministic", {
     expect_identical(lay1$segments, lay2$segments, info = dag_name)
     expect_identical(lay1$arcs, lay2$arcs, info = dag_name)
   }
+})
+
+test_that("edge_width draws every random DAG, with a bridge under each hline as wide as its edges", {
+  skip_on_cran()
+  n_bridges <- 0L
+  for (dag_name in names(.all_dags)) {
+    d <- .all_dags[[dag_name]]
+    d$edges$w <- seq_len(nrow(d$edges))
+    lay <- dag_layout(d)
+    p <- ggplot_dag(lay, edge_width = "w")
+    expect_silent(ggplot2::ggplot_build(p))
+
+    style <- lay$style
+    bridge <- lay$segments[lay$segments$layer == "bridge", ]
+    n_bridges <- n_bridges + nrow(bridge)
+    plain <- style$edge_stroke_width + 2 * min(style$edge_stroke_width, style$node_stroke_width)
+    keys <- paste(lay$edges$from, lay$edges$to, sep = "|")
+    # every edge the ordinary width: every bridge is the ordinary bridge
+    same <- stats::setNames(rep(style$edge_stroke_width, length(keys)), keys)
+    expect_equal(
+      metro_bridge_widths(bridge, lay$edge_paths, same, style),
+      rep(plain, nrow(bridge)),
+      info = dag_name
+    )
+    # and no bridge is under nothing
+    varied <- stats::setNames(as.numeric(d$edges$w), keys)
+    expect_true(
+      all(metro_bridge_widths(bridge, lay$edge_paths, varied, style) > 0),
+      info = dag_name
+    )
+  }
+  # the checks above are per bridge, so some random DAG must have one
+  expect_gt(n_bridges, 0L)
 })

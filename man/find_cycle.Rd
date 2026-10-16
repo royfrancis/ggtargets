@@ -6,6 +6,16 @@
 \usage{
 find_cycle(nodes, edges)
 }
+\arguments{
+\item{nodes}{A character vector of node names (non-empty, not \code{NA}).}
+
+\item{edges}{A data frame with \code{from} and \code{to} character columns, naming
+only nodes in \code{nodes}.}
+}
+\value{
+A character vector naming one cycle, from a node back to itself
+(\code{c("a", "b", "a")}), or \code{NULL} if there is none.
+}
 \description{
 Used by \code{\link[=as_dag]{as_dag()}} to name a cycle in its error, rather than just report
 that one exists. Iterative (an explicit stack), not the recursive

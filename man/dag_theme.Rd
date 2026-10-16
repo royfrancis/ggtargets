@@ -15,6 +15,11 @@ A list of ggplot2 theme/scale components.
 dagviz's SVG. The theme is an ordinary ggplot2 theme, so any of its
 elements can be overridden by adding \code{theme()} settings afterwards.
 }
+\details{
+A legend gets a small margin on its right (\code{legend.box.margin}, 5.5 pt),
+so that it doesn't touch the edge of the image. A plot without a legend
+has no such margin.
+}
 \examples{
 dag <- as_dag(data.frame(from = c("a", "a", "b"), to = c("b", "c", "c")))
 lay <- dag_layout(dag, style_metro())

@@ -7,9 +7,6 @@
 check_targets_installed()
 }
 \description{
-A small wrapper around \code{requireNamespace()} so \code{local_mocked_bindings()}
-can simulate "targets not installed" in tests without needing an actual
-missing installation (a bare \code{requireNamespace()} call can't be mocked
-this way, since it isn't a binding in this package's own namespace).
+Every function that needs \code{targets} calls this first.
 }
 \keyword{internal}

@@ -11,6 +11,9 @@ tar_ggplot(
   palette = metro_palette,
   node_shape = NULL,
   shapes = targets_node_shapes(),
+  node_size = NULL,
+  edge_width = NULL,
+  collapse_by = NULL,
   fixed_size = TRUE,
   zoom = 1,
   targets_only = TRUE,
@@ -19,8 +22,17 @@ tar_ggplot(
 )
 }
 \arguments{
-\item{style, node_color, edge_color, palette, node_shape, shapes}{Passed to
-\code{\link[=dag_layout]{dag_layout()}}/\code{\link[=ggplot_dag]{ggplot_dag()}}.}
+\item{style, node_color, edge_color, palette, node_shape, shapes, node_size, edge_width}{Passed to \code{\link[=dag_layout]{dag_layout()}}/\code{\link[=ggplot_dag]{ggplot_dag()}}. With \code{collapse_by}, the \code{n} of
+the collapsed graph's nodes and edges (the number of targets and of
+dependencies each stands for) is what \code{node_size = "n"} and
+\code{edge_width = "n"} draw.}
+
+\item{collapse_by}{\code{NULL} (the default), or the name of a node column to
+collapse the pipeline by: the targets that share a value are merged
+into one node (see \code{\link[=dag_collapse]{dag_collapse()}}). \code{\link[=tar_dag]{tar_dag()}} returns the columns
+\code{type}, \code{status}, \code{description}, \code{seconds}, \code{bytes} and \code{branches}, and
+\code{description} is the one to put a stage name in: see "Collapsing a
+pipeline by stage" above.}
 
 \item{fixed_size, zoom}{Passed to \code{\link[=ggplot_dag]{ggplot_dag()}}: by default, the plot
 has a fixed size so nodes, lines and text look the same in every
@@ -32,9 +44,9 @@ pipeline.}
 A \code{ggplot} object.
 }
 \description{
-The headline one-call function: \code{\link[=tar_dag]{tar_dag()}} + \code{\link[=dag_layout]{dag_layout()}} +
-\code{\link[=ggplot_dag]{ggplot_dag()}}. Mirrors \code{targets::tar_visnetwork()}'s filtering
-arguments.
+The headline one-call function: \code{\link[=tar_dag]{tar_dag()}}, then \code{\link[=dag_collapse]{dag_collapse()}} if you
+give a \code{collapse_by}, then \code{\link[=dag_layout]{dag_layout()}} and \code{\link[=ggplot_dag]{ggplot_dag()}}. Mirrors
+\code{targets::tar_visnetwork()}'s filtering arguments.
 }
 \details{
 To plot a pipeline in another folder: \code{script} and \code{store} locate the
@@ -47,6 +59,60 @@ regular target, a square for a dynamic-branching one, and triangles for
 imported functions and objects (only in the graph with \code{targets_only = FALSE}). A legend names the shapes when more than one is drawn. See
 \code{\link[=targets_node_shapes]{targets_node_shapes()}}.
 }
+\section{Collapsing a pipeline by stage}{
+
+\code{targets} has no tag or category field for a target, but it has one free-form
+text field, \code{description}, and \code{collapse_by = "description"} collapses the
+pipeline by it: the targets that share a description become one node,
+labeled with how many they are (\code{ingest (4)}), and the dependencies between
+stages become one edge each (see \code{\link[=dag_collapse]{dag_collapse()}}). With \code{node_size = "n"}
+and \code{edge_width = "n"}, the size of a node and the width of an edge show
+those counts.
+
+A description can be set for each target, \code{tar_target(raw, read_data(), description = "ingest")}, or for a block of them with \code{tar_option_set()},
+which applies to every target defined after it:
+
+\if{html}{\out{<div class="sourceCode r">}}\preformatted{# _targets.R
+library(targets)
+tar_option_set(description = "ingest")
+ingest <- list(tar_target(raw, read_data()), tar_target(clean, tidy(raw)))
+tar_option_set(description = "model")
+model <- list(tar_target(fit, fit_model(clean)))
+tar_option_set(description = character(0)) # back to no description
+c(ingest, model)
+}\if{html}{\out{</div>}}
+
+\if{html}{\out{<div class="sourceCode r">}}\preformatted{tar_ggplot(collapse_by = "description", node_size = "n", edge_width = "n")
+}\if{html}{\out{</div>}}
+
+Things to know:
+\itemize{
+\item End a block with \code{tar_option_set(description = character(0))}. The option
+stays set for every target defined after it, including those in files
+loaded later with \code{tar_source()}.
+\item \code{tarchetypes::tar_map()} appends the mapped values to each description by
+default (\code{descriptions = tidyselect::everything()}), so the targets it
+makes would be stages of their own. Pass \code{descriptions = NULL} to keep the
+stage's description.
+\item The descriptions must match exactly: \code{"ingest"} and \code{"Ingest "} are two
+stages.
+\item A target with no description is a node of its own. A stage can't be named
+like such a target (an error: the two would be merged).
+\item Stages that depend on each other both ways (A -> B -> A) are an error that
+names the edges behind it.
+\item \code{description} is also the label of a target in \code{\link[targets:tar_manifest]{targets::tar_manifest()}}
+and \code{\link[targets:tar_visnetwork]{targets::tar_visnetwork()}}, so a short stage name is a good one, and
+a sentence is not.
+\item \code{node_color = "status"} colors a stage by its status when all its targets
+share one. A stage whose targets differ has no status, and is drawn gray
+with no legend entry, as is any node with a missing value in the
+\code{node_color} column.
+\item For metadata of your own, add a column to the nodes of \code{\link[=tar_dag]{tar_dag()}}'s result
+(its names can't be \code{row}, \code{col}, \code{x}, \code{y} or \code{color_index}), then call
+\code{\link[=dag_collapse]{dag_collapse()}} and \code{\link[=ggplot_dag]{ggplot_dag()}} yourself.
+}
+}
+
 \examples{
 \dontshow{if (requireNamespace("targets", quietly = TRUE)) withAutoprint(\{ # examplesIf}
 # each call is its own tar_dir(), so each plot actually prints - inside
@@ -64,6 +130,17 @@ targets::tar_dir({
     targets::tar_target(y, x + 1)
   ))
   tar_ggplot(node_color = "status", palette = targets_status_colors())
+})
+
+# the pipeline in stages, kept in the descriptions of its targets
+targets::tar_dir({
+  targets::tar_script(list(
+    targets::tar_target(raw, 1, description = "ingest"),
+    targets::tar_target(clean, raw + 1, description = "ingest"),
+    targets::tar_target(fit, clean * 2, description = "model"),
+    targets::tar_target(out, fit, description = "report")
+  ))
+  tar_ggplot(collapse_by = "description", node_size = "n", edge_width = "n")
 })
 \dontshow{\}) # examplesIf}
 }

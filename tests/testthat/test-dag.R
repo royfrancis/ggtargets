@@ -5,8 +5,8 @@
 # through tar_dag(), but only off CRAN).
 #
 # The other as_dag() guarantees are tested elsewhere, not missing: the
-# self-loop and cycle errors are snapshotted in test-messages.R, the
-# layout-side cycle error in test-order.R, and find_cycle() itself below.
+# self-loop and cycle errors are snapshotted in test-messages.R, and
+# find_cycle() itself below.
 
 test_that("as_dag() drops duplicate edges, keeping the first", {
   edges <- data.frame(
@@ -50,12 +50,20 @@ test_that("as_dag() converts factor from/to and factor nodes$name to character",
   expect_type(d$nodes$name, "character")
 })
 
+test_that("as_dag() keeps a factor `label` column as text", {
+  # ifelse() on a factor gives its integer codes, not its levels
+  nodes <- data.frame(name = c("a", "b"), label = factor(c("Alpha", NA)))
+  d <- as_dag(data.frame(from = "a", to = "b"), nodes = nodes)
+  expect_identical(d$nodes$label, c("Alpha", "b"))
+})
+
 test_that("as_dag() gives the default-method error on a character path, a matrix, and an igraph object", {
-  expect_error(as_dag("x.dot"))
+  expect_error(as_dag("x.dot"), "doesn't know how to convert")
+  expect_error(as_dag(matrix(1:4, 2, 2)), "doesn't know how to convert")
 
   skip_if_not_installed("igraph")
   g <- igraph::graph_from_edgelist(matrix(c("a", "b"), ncol = 2))
-  expect_error(as_dag(g))
+  expect_error(as_dag(g), "doesn't know how to convert")
 })
 
 test_that("as_dag() handles an empty graph (0 nodes, 0 edges)", {
@@ -75,6 +83,17 @@ test_that("find_cycle() doesn't overflow the call stack on a long chain (regress
   )
   expect_no_error(d <- as_dag(edges))
   expect_equal(nrow(d$nodes), 3000)
+})
+
+test_that("find_cycle() names a cycle from a node back to itself, or returns NULL", {
+  # a -> b -> a is a cycle; a -> c is not part of it
+  edges <- data.frame(
+    from = c("a", "b", "a"),
+    to = c("b", "a", "c"),
+    stringsAsFactors = FALSE
+  )
+  expect_identical(find_cycle(c("a", "b", "c"), edges), c("a", "b", "a"))
+  expect_null(find_cycle(c("a", "b", "c"), edges[c(1, 3), ]))
 })
 
 # Node names are join keys: edge attributes and colors are matched on
@@ -100,6 +119,30 @@ test_that("as_dag() rejects NA node names, from nodes= and from either endpoint"
   expect_error(
     as_dag(data.frame(from = c("a", "b"), to = c("b", NA))),
     "`x$to` has missing",
+    fixed = TRUE
+  )
+})
+
+test_that("as_dag() rejects empty node names, from nodes= and from either endpoint", {
+  # an empty name can't be looked up by name (find_cycle() does), so it used
+  # to fail with "attempt to use zero-length variable name"
+  edges <- data.frame(from = "a", to = "b", stringsAsFactors = FALSE)
+  expect_error(
+    as_dag(
+      edges,
+      nodes = data.frame(name = c("a", "b", ""), stringsAsFactors = FALSE)
+    ),
+    "`nodes$name` has empty",
+    fixed = TRUE
+  )
+  expect_error(
+    as_dag(data.frame(from = c("a", ""), to = c("b", "c"))),
+    "`x$from` has empty",
+    fixed = TRUE
+  )
+  expect_error(
+    as_dag(data.frame(from = c("a", "b"), to = c("b", ""))),
+    "`x$to` has empty",
     fixed = TRUE
   )
 })
@@ -334,4 +377,58 @@ test_that("find_cycle() names just the cycle, past an acyclic component and a le
     find_cycle(c("p", "q", "x", "a", "b"), edges),
     c("a", "b", "a")
   )
+})
+
+test_that("as_dag() rejects node columns named like the layout's own", {
+  edges <- data.frame(from = "a", to = "b")
+  for (col in reserved_node_columns) {
+    nodes <- data.frame(name = c("a", "b"), junk = 1:2)
+    names(nodes)[2] <- col
+    expect_error(as_dag(edges, nodes = nodes), "reserved", info = col)
+  }
+  # near misses, and the dag's own keys, are fine
+  nodes <- data.frame(
+    name = c("a", "b"),
+    label = c("A", "B"),
+    X = 1,
+    xx = 2,
+    Row = 3,
+    colour = 4,
+    n = 5
+  )
+  expect_no_error(as_dag(edges, nodes = nodes))
+  # a dag with no nodes table has nothing to clash
+  expect_no_error(as_dag(edges))
+})
+
+test_that("the reserved node columns are exactly the layout's own besides name and label", {
+  # if a column is added to the layout, a dag column of that name would
+  # overwrite it: add it to reserved_node_columns
+  lay <- dag_layout(as_dag(data.frame(from = "a", to = "b")))
+  expect_setequal(
+    reserved_node_columns,
+    setdiff(names(lay$nodes), c("name", "label"))
+  )
+})
+
+test_that("a dag edited after as_dag(), or built by hand, is checked when it is laid out", {
+  d <- fake_dag()
+  d$nodes$x <- 1:3
+  expect_error(dag_layout(d), "reserved")
+  expect_error(ggplot_dag(d), "reserved")
+  testthat::local_mocked_bindings(tar_dag = function(...) d)
+  expect_error(tar_ggplot(), "reserved")
+
+  by_hand <- structure(
+    list(
+      nodes = data.frame(name = "a", label = "a", y = 1),
+      edges = data.frame(from = character(0), to = character(0))
+    ),
+    class = "dag"
+  )
+  expect_error(dag_layout(by_hand), "reserved")
+})
+
+test_that("what tar_dag() returns never clashes with the layout's columns", {
+  expect_no_error(dag_layout(as_dag(fake_network())))
 })

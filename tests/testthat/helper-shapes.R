@@ -1,4 +1,5 @@
-# Helpers for tests of node shapes and their legends (test-shape.R,
+# Helpers for tests of the drawn plot: node shapes and their legends, the
+# node and line layers (test-shape.R, test-plot.R, test-size.R, test-stages.R,
 # test-targets.R).
 
 # A hand-built dag with every targets vertex type: tar_network()'s own
@@ -43,7 +44,8 @@ legends_of <- function(p) {
     list(
       labels = vapply(labels, function(l) l$children[[1]]$label, character(1)),
       pch = vapply(points, function(pt) as.integer(pt$pch), integer(1)),
-      fill = vapply(points, function(pt) pt$gp$fill, character(1))
+      fill = vapply(points, function(pt) pt$gp$fill, character(1)),
+      size = vapply(points, function(pt) as.numeric(pt$gp$fontsize), numeric(1))
     )
   })
 }
@@ -57,4 +59,31 @@ node_layer <- function(p) {
 node_data <- function(p) {
   geoms <- vapply(p$layers, function(l) class(l$geom)[1], character(1))
   ggplot2::ggplot_build(p)$data[[which(geoms == "GeomPoint")]]
+}
+
+# Draw a plot on a null device. ggplot2 drops a line with a missing color only
+# when it draws (a warning, "Removed rows containing missing values"), which
+# ggplot_build() never does, so a check on the built data alone can miss it.
+draw_plot <- function(p) {
+  grDevices::pdf(NULL)
+  on.exit(grDevices::dev.off())
+  ggplot2::ggplotGrob(p)
+}
+
+# The plot's line layers, as built: `segments` (in draw order: the leaders, the
+# vlines, the bridges) and `paths` (the arcs and hlines).
+edge_layers <- function(p) {
+  geoms <- vapply(p$layers, function(l) class(l$geom)[1], character(1))
+  data <- ggplot2::ggplot_build(p)$data
+  list(
+    segments = data[geoms == "GeomSegment"],
+    paths = data[geoms == "GeomPath"]
+  )
+}
+
+# The colors of the plot's lines (edges, bridges and leaders), as built.
+line_colours <- function(p) {
+  geoms <- vapply(p$layers, function(l) class(l$geom)[1], character(1))
+  built <- ggplot2::ggplot_build(p)$data[geoms %in% c("GeomPath", "GeomSegment")]
+  unlist(lapply(built, function(layer) layer$colour))
 }

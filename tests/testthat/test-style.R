@@ -1,7 +1,5 @@
-# The "toy style" compatibility test from plan.md Section 9.2 (a hand-built
-# style working with ggplot_dag()/tar_ggplot() unchanged) needs dag_layers()
-# and ggplot_dag(), which are Phase 3. Only style_metro()'s own defaults,
-# SVG-to-R mappings and validation are covered here.
+# style_metro()'s own defaults, SVG-to-R mappings and validation. How a style
+# is drawn is tested through dag_layers() and ggplot_dag(), in test-plot.R.
 
 test_that("style_metro() defaults equal dagviz's StyleConfig", {
   s <- style_metro()
@@ -76,11 +74,15 @@ test_that("style_metro() accepts every documented argument", {
     label_arrow_dash_array = "44",
     arc_radius = 12,
     bridge_color = "gray95",
-    minimal_width = 200
+    minimal_width = 200,
+    node_size_range = c(3, 8),
+    edge_width_range = c(1, 4)
   )
   expect_equal(s$scale, 12)
   expect_equal(s$node_fill, "red")
   expect_equal(s$minimal_width, 200)
+  expect_equal(s$node_size_range, c(3, 8))
+  expect_equal(s$edge_width_range, c(1, 4))
 })
 
 test_that("style_metro() errors on an unknown argument", {

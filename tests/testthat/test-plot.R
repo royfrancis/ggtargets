@@ -132,7 +132,7 @@ test_that("invalid node_color/edge_color error", {
   expect_error(ggplot_dag(d, edge_color = "not_a_column_or_color"))
 })
 
-test_that("ggsave_dag() writes PNG, PDF and SVG at the layout's true pixel size", {
+test_that("ggsave_dag() writes PNG, PDF and SVG, the PNG at the layout's true pixel size", {
   skip_if_not_installed("png")
   skip_if_not_installed("svglite")
   lay <- dag_layout(small_dag(), style_metro())
@@ -173,7 +173,6 @@ test_that("ggsave_dag() errors on a plot with no coord_fixed() limits", {
 })
 
 test_that("manual assembly (ggplot() + dag_layers() + dag_theme()) works, including ggsave_dag()", {
-  skip_if_not_installed("png")
   lay <- dag_layout(small_dag(), style_metro())
   p <- ggplot2::ggplot() + dag_layers(lay) + dag_theme()
   expect_s3_class(p, "ggplot")
@@ -192,17 +191,21 @@ test_that("style_metro(node_fill=) recolors nodes only, not edges", {
     function(l) if (inherits(l, "Layer")) class(l$geom)[1] else class(l)[1],
     character(1)
   )
-  node_layer <- layers[[which(geoms == "GeomPoint")]]
-  expect_true(all(node_layer$data$fill_ == "purple"))
-  segment_layers <- layers[which(geoms == "GeomSegment")]
-  vline_colors <- unlist(lapply(segment_layers, function(l) {
-    if (!is.null(l$data$color_)) l$data$color_ else NULL
-  }))
-  expect_false(any(vline_colors == "purple"))
+  point_layer <- layers[[which(geoms == "GeomPoint")]]
+  expect_true(all(point_layer$data$fill_ == "purple"))
+  # the edges: the straight lines, and the bends and horizontal runs
+  edge_colors <- function(geom) {
+    unlist(lapply(layers[which(geoms == geom)], function(l) l$data$color_))
+  }
+  for (geom in c("GeomSegment", "GeomPath")) {
+    colors <- edge_colors(geom)
+    # an empty set would pass the check below without checking anything
+    expect_gt(length(colors), 0L)
+    expect_false(any(colors == "purple"), info = geom)
+  }
 })
 
 test_that("ggplot_dag() and ggsave_dag() handle the empty dag without error", {
-  skip_if_not_installed("png")
   d <- as_dag(
     data.frame(from = character(0), to = character(0)),
     nodes = data.frame(name = character(0), stringsAsFactors = FALSE)
@@ -288,11 +291,59 @@ test_that("dag_size() and ggsave_dag() make room for a legend", {
   f <- withr::local_tempfile(fileext = ".png")
   ggsave_dag(f, p)
   dims <- dim(png::readPNG(f))
-  expect_equal(c(dims[2], dims[1]), unname(round(s * 96)), tolerance = 1)
+  # within a pixel: the device drops a fractional pixel. (`expect_equal(
+  # tolerance = 1)` would be relative, and allow an image twice the size.)
+  expect_lte(max(abs(c(dims[2], dims[1]) - unname(s) * 96)), 1)
 })
 
 test_that("dag_size() leaves no device open", {
   n <- length(grDevices::dev.list())
   dag_size(ggplot_dag(chain_dag(3)))
   expect_equal(length(grDevices::dev.list()), n)
+})
+
+test_that("a node with an NA color value keeps its edges, whatever the edge_color", {
+  edges <- data.frame(from = c("a", "a", "b"), to = c("b", "c", "c"))
+  with_values <- function(values) {
+    as_dag(edges, nodes = data.frame(name = c("a", "b", "c"), v = values))
+  }
+  complete <- with_values(c("p", "q", "r"))
+  cases <- list(
+    source = c(NA, "q", "r"), # a is the source of two edges
+    middle = c("p", NA, "r"),
+    sink = c("p", "q", NA),
+    all = c(NA_character_, NA, NA)
+  )
+  for (edge_color in c("source", "target", "gray40")) {
+    reference <- length(line_colours(ggplot_dag(complete, node_color = "v", edge_color = edge_color)))
+    for (case in names(cases)) {
+      info <- paste(edge_color, case)
+      p <- ggplot_dag(with_values(cases[[case]]), node_color = "v", edge_color = edge_color)
+      # the lines are all there, in a color, and drawing drops none of them
+      expect_false(anyNA(line_colours(p)), info = info)
+      expect_length(line_colours(p), reference)
+      expect_no_warning(draw_plot(p))
+      # the node is the gray, and the legend has no entry for it
+      fills <- node_data(p)$fill
+      layout_names <- dag_layout(with_values(cases[[case]]))$nodes$name
+      na_nodes <- layout_names[is.na(cases[[case]][match(layout_names, c("a", "b", "c"))])]
+      expect_true(all(fills[match(na_nodes, layout_names)] == value_na_color), info = info)
+      labels <- unlist(lapply(legends_of(p), `[[`, "labels"))
+      expect_false(any(is.na(labels) | labels == "NA"), info = info)
+    }
+  }
+  # no node_color at all: nothing changes
+  expect_no_warning(draw_plot(ggplot_dag(with_values(c(NA, "q", "r")))))
+})
+
+test_that("a named palette does not warn about NA, and still colors the other values", {
+  d <- as_dag(
+    data.frame(from = c("a", "b"), to = c("c", "c")),
+    nodes = data.frame(name = c("a", "b", "c"), v = c(NA, "x", "y"))
+  )
+  p <- expect_no_warning(
+    ggplot_dag(d, node_color = "v", palette = c(x = "red", y = "blue"))
+  )
+  expect_setequal(node_data(p)$fill, c(value_na_color, "red", "blue"))
+  expect_no_warning(draw_plot(p))
 })

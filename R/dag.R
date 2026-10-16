@@ -7,15 +7,21 @@
 #'
 #' @param x An edge-list data frame with `from` and `to` columns, or a
 #'   `list` with `vertices` and `edges` elements (the shape
-#'   [targets::tar_network()] returns; see [tar_dag()]).
+#'   [targets::tar_network()] returns; see [tar_dag()]). Any other columns
+#'   of the edge-list data frame are kept as edge attributes; a numeric one
+#'   can set the edges' width (`edge_width`, see [ggplot_dag()]).
 #' @param nodes Optional data frame of nodes, with at least a `name` column,
-#'   listed before any additional nodes implied only by `x`'s endpoints.
+#'   listed before any additional nodes implied only by `x`'s endpoints. Its
+#'   other columns are node attributes, but not named `row`, `col`, `x`, `y`
+#'   or `color_index`: the layout uses those names for its own columns
+#'   (see [dag_layout()]), so these names are reserved, and using one is an
+#'   error.
 #' @param ... Passed on to methods.
 #' @return A `dag`: a classed list with `nodes` (columns `name`, `label`,
-#'   plus any extra attributes, which `node_color` and `node_shape` can
-#'   name) and `edges`
-#'   (columns `from`, `to`, plus any extra columns of `x`, kept but not
-#'   used for drawing) data frames, in insertion order.
+#'   plus any extra attributes, which `node_color`, `node_shape` and, for a
+#'   numeric one, `node_size` can name) and `edges` (columns `from`, `to`,
+#'   plus any extra columns of `x`, which only `edge_width` uses for
+#'   drawing) data frames, in insertion order.
 #' @export
 #' @examples
 #' edges <- data.frame(from = c("a", "a", "b"), to = c("b", "c", "c"))
@@ -44,6 +50,9 @@ as_dag.data.frame <- function(x, nodes = NULL, ...) {
   }
   if (!is.null(nodes) && !"name" %in% names(nodes)) {
     stop("as_dag(): `nodes` is missing column: name", call. = FALSE)
+  }
+  if (!is.null(nodes)) {
+    check_node_columns(names(nodes), "as_dag()", "`nodes`")
   }
   edges <- x
   edges$from <- as.character(edges$from)
@@ -93,7 +102,8 @@ as_dag.data.frame <- function(x, nodes = NULL, ...) {
       nodes_df[[col]] <- extra[[col]][match(nodes_df$name, extra$name)]
     }
     if ("label" %in% names(extra)) {
-      lab <- extra$label[match(nodes_df$name, extra$name)]
+      # as.character(): ifelse() would turn a factor into its integer codes
+      lab <- as.character(extra$label[match(nodes_df$name, extra$name)])
       nodes_df$label <- ifelse(is.na(lab), nodes_df$name, lab)
     }
   }
@@ -111,7 +121,7 @@ as_dag.data.frame <- function(x, nodes = NULL, ...) {
 #' table to `as_dag.data.frame()` instead.
 #'
 #' Node names are identities, and the package matches edge colors on them
-#' downstream, so every method rejects a name that is `NA`
+#' downstream, so every method rejects a name that is `NA`, empty
 #' or contains `"|"` or a carriage return.
 #' @export
 as_dag.list <- function(x, ...) {
@@ -157,10 +167,12 @@ as_dag.default <- function(x, ...) {
 #'
 #' Node names are this package's join keys: downstream, edge colors are
 #' matched on `paste(from, to, sep = "|")` (see
-#' [resolve_edge_color()]), and `NA` has no identity at all. Rejecting `|`
-#' and carriage returns in the one constructor every `dag` passes through
-#' is what makes those keys collision-free everywhere else, without the
-#' rendering path needing a collision-proof key scheme of its own.
+#' [resolve_edge_color()]), and `NA` has no identity at all. Neither has an
+#' empty name, which can't even be looked up by name in an environment (as
+#' [find_cycle()] does). Rejecting `|` and carriage returns in the one
+#' constructor every `dag` passes through is what makes those keys
+#' collision-free everywhere else, without the rendering path needing a
+#' collision-proof key scheme of its own.
 #'
 #' Names only: node attributes such as `status`, `seconds` and `bytes`
 #' legitimately carry `NA` and are untouched.
@@ -172,6 +184,9 @@ as_dag.default <- function(x, ...) {
 check_node_names <- function(x, what) {
   if (anyNA(x)) {
     stop("as_dag(): ", what, " has missing (NA) node name(s).", call. = FALSE)
+  }
+  if (any(x == "")) {
+    stop("as_dag(): ", what, " has empty (\"\") node name(s).", call. = FALSE)
   }
   bad <- unique(x[grepl("[|\r]", x)])
   if (length(bad) > 0) {
@@ -188,6 +203,47 @@ check_node_names <- function(x, what) {
   invisible(x)
 }
 
+# The columns of a layout's `nodes` besides `name` and `label`: `dag_layout()`
+# copies a dag's extra node columns next to them, so a dag column of the same
+# name would overwrite one (a column `x` replaced the node's coordinates). The
+# names are reserved instead. test-dag.R checks this list against the layout's
+# own columns, so a new one can't be forgotten.
+reserved_node_columns <- c("row", "col", "x", "y", "color_index")
+
+#' Reject node columns that the layout needs for itself
+#'
+#' A node column named like one of the layout's own (see
+#' `reserved_node_columns`) would silently overwrite it in [dag_layout()]:
+#' the nodes would be drawn where the column says, or colored by it. An error
+#' is the only choice that never draws a wrong plot: a warning would still
+#' have to say which of the two columns wins.
+#'
+#' Checked by [as_dag()], and again by [dag_layout()], since a dag edited
+#' after `as_dag()` (`d$nodes$x <- 1`) or built by hand never passes through
+#' it.
+#'
+#' @param columns A character vector of node column names.
+#' @param fn,what Which function raised the error, and which argument the
+#'   columns came from, for the message.
+#' @return `columns`, invisibly.
+#' @keywords internal
+check_node_columns <- function(columns, fn, what) {
+  bad <- intersect(columns, reserved_node_columns)
+  if (length(bad) > 0L) {
+    stop(
+      sprintf(
+        "%s: %s has column(s) named like the layout's own: %s. These names are reserved (%s); rename the column(s).",
+        fn,
+        what,
+        paste(bad, collapse = ", "),
+        paste(reserved_node_columns, collapse = ", ")
+      ),
+      call. = FALSE
+    )
+  }
+  invisible(columns)
+}
+
 #' Find one cycle in a graph, if any, by iterative depth-first search
 #'
 #' Used by [as_dag()] to name a cycle in its error, rather than just report
@@ -196,6 +252,11 @@ check_node_names <- function(x, what) {
 #' this, and a real pipeline can have thousands of targets in a chain,
 #' which overflowed R's call stack ("node stack overflow") well before
 #' that.
+#' @param nodes A character vector of node names (non-empty, not `NA`).
+#' @param edges A data frame with `from` and `to` character columns, naming
+#'   only nodes in `nodes`.
+#' @return A character vector naming one cycle, from a node back to itself
+#'   (`c("a", "b", "a")`), or `NULL` if there is none.
 #' @keywords internal
 find_cycle <- function(nodes, edges) {
   succ <- split(edges$to, factor(edges$from, levels = nodes))
@@ -234,9 +295,18 @@ find_cycle <- function(nodes, edges) {
   NULL
 }
 
+# "1 node", "2 nodes": for the one-line summaries below
+count_noun <- function(n, noun) {
+  sprintf("%d %s%s", n, noun, if (n == 1L) "" else "s")
+}
+
 #' @export
 format.dag <- function(x, ...) {
-  sprintf("<dag> %d nodes, %d edges", nrow(x$nodes), nrow(x$edges))
+  sprintf(
+    "<dag> %s, %s",
+    count_noun(nrow(x$nodes), "node"),
+    count_noun(nrow(x$edges), "edge")
+  )
 }
 
 #' @export
@@ -254,10 +324,10 @@ format.dag_layout <- function(x, ...) {
   }
   n_cols <- length(unique(x$nodes$col))
   sprintf(
-    "<dag_layout> %d nodes, %d edges, %d columns",
-    nrow(x$nodes),
-    n_edges,
-    n_cols
+    "<dag_layout> %s, %s, %s",
+    count_noun(nrow(x$nodes), "node"),
+    count_noun(n_edges, "edge"),
+    count_noun(n_cols, "column")
   )
 }
 

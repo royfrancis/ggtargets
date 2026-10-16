@@ -13,8 +13,8 @@ resolve_value_palette(values, palette)
 color vector matched by value.}
 }
 \value{
-A list with \code{colors} (one per element of \code{values}) and \code{map}
-(a named vector, value -> color).
+A list with \code{colors} (one per element of \code{values}, never \code{NA}) and
+\code{map} (a named vector, value -> color, with no entry for \code{NA}).
 }
 \description{
 Used by \code{\link[=resolve_node_color]{resolve_node_color()}} for a node column: distinct
@@ -22,5 +22,13 @@ values (factor levels, or else order of first appearance) are mapped to
 \code{palette}. A named palette is matched by value, with unmatched values
 set to gray and a warning; an unnamed vector that is too short is an
 error; a function is called with the number of distinct values.
+}
+\details{
+A missing value (\code{NA}) is not a value: it takes no color from \code{palette},
+is not in \code{map} (so it has no legend entry, as for shapes), and is the
+same gray as an unmatched value, but without the warning. Its color is
+always defined, because the edges drawn in a node's color (\code{"source"},
+\code{"target"}) would otherwise be \code{NA}, and ggplot2 drops a line with a missing
+color without a word.
 }
 \keyword{internal}

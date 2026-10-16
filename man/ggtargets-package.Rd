@@ -4,14 +4,14 @@
 \name{ggtargets-package}
 \alias{ggtargets}
 \alias{ggtargets-package}
-\title{ggtargets: Metro Style Diagrams of targets Pipelines Dependency Graph}
+\title{ggtargets: Metro-Style Diagrams of 'targets' Pipeline Dependency Graphs}
 \description{
-Creates metro-style diagrams of targets pipelines dependency graph and other directed acyclic graphs using ggplot2.
+Creates metro-style diagrams of the dependency graphs of 'targets' pipelines, and of other directed acyclic graphs, using 'ggplot2'.
 }
 \seealso{
 Useful links:
 \itemize{
-  \item \url{https://github.com/royfrancis/ggtargets}
+  \item \url{https://github.com/royfrancis/ggtargets https://royfrancis.github.io/ggtargets https://royfrancis.r-universe.dev/ggtargets}
   \item Report bugs at \url{https://github.com/royfrancis/ggtargets/issues}
 }
 

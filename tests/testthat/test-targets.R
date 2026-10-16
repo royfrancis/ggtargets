@@ -18,7 +18,7 @@ test_that("tar_dag() keeps type/status/description/seconds/bytes/branches", {
     d <- tar_dag()
     expect_s3_class(d, "dag")
     expect_setequal(d$nodes$name, c("x", "y"))
-    for (col in c("type", "status", "description", "seconds", "bytes")) {
+    for (col in c("type", "status", "description", "seconds", "bytes", "branches")) {
       expect_true(col %in% names(d$nodes), info = col)
     }
   })
@@ -26,7 +26,9 @@ test_that("tar_dag() keeps type/status/description/seconds/bytes/branches", {
 
 test_that("targets_status_colors() matches the installed targets version", {
   skip_if_not_installed("targets")
-  fn <- targets:::visual_class$public_methods$produce_fills # nolint: undesirable_function_linter.
+  # reads targets' internals, which a targets release may reorganize
+  skip_on_cran()
+  fn <-targets:::visual_class$public_methods$produce_fills # nolint: undesirable_function_linter.
   theirs <- eval(body(fn)[[2]][[3]])
   ours <- targets_status_colors()
   expect_identical(ours[order(names(ours))], theirs[order(names(theirs))])
@@ -34,7 +36,9 @@ test_that("targets_status_colors() matches the installed targets version", {
 
 test_that("targets_node_shapes() matches the installed targets version", {
   skip_if_not_installed("targets")
-  fn <- targets:::visnetwork_class$public_methods$produce_shapes # nolint: undesirable_function_linter.
+  # reads targets' internals, which a targets release may reorganize
+  skip_on_cran()
+  fn <-targets:::visnetwork_class$public_methods$produce_shapes # nolint: undesirable_function_linter.
   theirs <- eval(body(fn)[[2]][[3]])
   # visNetwork's own names for the shapes
   visnetwork <- c(
@@ -99,7 +103,9 @@ test_that("tar_ggplot(targets_only = FALSE) draws functions and objects as trian
 test_that("tar_ggplot() plots before and after tar_make(), status changes, for every bundled pipeline", {
   skip_if_not_installed("targets")
   skip_on_cran()
-  for (pipeline in c("basic", "branching", "analysis")) {
+  pipelines <- list.files(pipelines_dir)
+  expect_gte(length(pipelines), 4L)
+  for (pipeline in pipelines) {
     targets::tar_dir({
       use_pipeline(pipeline)
 
@@ -151,10 +157,15 @@ test_that("node_color = \"branches\" (NA for stems) maps to a real color, no war
     geoms <- vapply(p$layers, function(l) class(l$geom)[1], character(1))
     fills <- b$data[[which(geoms == "GeomPoint")]]$fill
     expect_false(anyNA(fills)) # every node, including NA-branches ones, gets a real color
+    # ...and so does every edge: one out of a stem (NA branches) used to have
+    # no color, and ggplot2 dropped it, with a warning, when it drew the plot
+    expect_gt(length(line_colours(p)), 0L)
+    expect_false(anyNA(line_colours(p)))
+    expect_no_warning(draw_plot(p))
   })
 })
 
-test_that("targets_only = FALSE adds functions and objects", {
+test_that("targets_only = FALSE adds the functions a target uses", {
   skip_if_not_installed("targets")
   skip_on_cran()
   targets::tar_dir({
@@ -182,6 +193,10 @@ test_that("names/allow/exclude pass through as tidyselect (tar_network()'s own s
     d_all <- tar_dag()
     expect_setequal(d_all$nodes$name, c("x", "y", "z"))
 
+    # `names` keeps what it selects and everything upstream of it
+    d_names <- tar_dag(names = tidyselect::starts_with("y"))
+    expect_setequal(d_names$nodes$name, c("x", "y"))
+
     d_allow <- tar_dag(allow = tidyselect::starts_with("x"))
     expect_setequal(d_allow$nodes$name, "x")
 
@@ -190,13 +205,14 @@ test_that("names/allow/exclude pass through as tidyselect (tar_network()'s own s
   })
 })
 
-test_that("tar_ggplot()'s own exclude= argument (plan.md's public API example) filters through two ... layers", {
-  # plan.md's example writes the *bare* starts_with("tmp_"), with no
-  # tidyselect:: prefix - which only resolves if targets itself
-  # re-exports it (confirmed: "starts_with" %in%
+test_that("tar_ggplot()'s exclude= filters through two ... layers", {
+  # `exclude` is not an argument of tar_ggplot(): it goes through `...` to
+  # tar_dag(), and through its `...` to tar_network(). A user writes the bare
+  # starts_with("tmp_"), with no tidyselect:: prefix, which only resolves if
+  # targets itself re-exports it (it does: "starts_with" %in%
   # getNamespaceExports("targets")), since ggtargets doesn't depend on
-  # tidyselect. Use targets::starts_with() here for the same bare
-  # resolution without an unconditional library(targets) in a test file.
+  # tidyselect. Use targets::starts_with() here for the same bare resolution
+  # without an unconditional library(targets) in a test file.
   skip_if_not_installed("targets")
   skip_on_cran()
   targets::tar_dir({
@@ -250,6 +266,9 @@ test_that("withr::with_dir() plots a pipeline in another folder", {
   })
   d <- withr::with_dir(project_dir, tar_dag())
   expect_setequal(d$nodes$name, "x")
+  p <- withr::with_dir(project_dir, tar_ggplot())
+  expect_s3_class(p, "ggplot")
+  expect_silent(ggplot2::ggplot_build(p))
 })
 
 test_that("envir defaults to the caller's environment, seeing caller-defined functions", {
@@ -284,17 +303,12 @@ test_that("tar_dag()/tar_ggplot() error clearly outside a targets project", {
   skip_if_not_installed("targets")
   skip_on_cran()
   empty_dir <- withr::local_tempdir()
+  # the message is targets' own, so it is matched here, not snapshotted (the
+  # one for a missing targets package, which is ours, is in test-messages.R)
   withr::with_dir(empty_dir, {
-    expect_error(tar_dag())
-    expect_error(tar_ggplot())
+    expect_error(tar_dag(), "_targets.R", fixed = TRUE)
+    expect_error(tar_ggplot(), "_targets.R", fixed = TRUE)
   })
-})
-
-test_that("tar_dag() errors clearly when targets is not installed (mocked)", {
-  testthat::local_mocked_bindings(check_targets_installed = function() {
-    stop("mocked: targets not installed", call. = FALSE)
-  })
-  expect_snapshot(error = TRUE, tar_dag())
 })
 
 test_that("targets_status_colors() is a named vector of hex colors, one per status", {
@@ -468,4 +482,65 @@ test_that("tar_ggplot() sends fixed_size and zoom on to the plot, and keeps ggpl
 
   expect_warning(tar_ggplot(fixed_size = FALSE, zoom = 2), "zoom")
   expect_error(tar_ggplot(zoom = -1), "zoom")
+})
+
+test_that("tar_ggplot(collapse_by =) draws the dag collapsed by that column", {
+  testthat::local_mocked_bindings(tar_dag = function(...) stage_dag())
+  p <- tar_ggplot(collapse_by = "stage", node_color = "stage")
+  ref <- ggplot_dag(dag_collapse(stage_dag(), "stage"), node_color = "stage")
+  expect_identical(
+    ggplot2::ggplot_build(p)$data,
+    ggplot2::ggplot_build(ref)$data
+  )
+
+  # ...and it made a difference: three nodes, not six
+  geoms <- vapply(p$layers, function(l) class(l$geom)[1], character(1))
+  expect_identical(nrow(ggplot2::ggplot_build(p)$data[[which(geoms == "GeomPoint")]]), 3L)
+  full <- tar_ggplot()
+  geoms <- vapply(full$layers, function(l) class(l$geom)[1], character(1))
+  expect_identical(nrow(ggplot2::ggplot_build(full)$data[[which(geoms == "GeomPoint")]]), 6L)
+
+  expect_error(tar_ggplot(collapse_by = "nope"), "not a node column")
+})
+
+test_that("tar_ggplot(collapse_by = \"description\") collapses a real pipeline", {
+  skip_if_not_installed("targets")
+  skip_on_cran()
+  targets::tar_dir({
+    targets::tar_script(list(
+      targets::tar_target(x, 1, description = "input"),
+      targets::tar_target(y, x + 1, description = "input"),
+      targets::tar_target(z, y * 2, description = "output"),
+      targets::tar_target(w, z)
+    ))
+    d <- dag_collapse(tar_dag(), "description")
+    # `w` has no description, so it is left alone (tar_network() lists the
+    # targets in its own order, so look them up by name)
+    expect_setequal(d$nodes$name, c("input", "output", "w"))
+    n <- stats::setNames(d$nodes$n, d$nodes$name)
+    expect_identical(n[c("input", "output", "w")], c(input = 2L, output = 1L, w = 1L))
+    expect_setequal(
+      paste(d$edges$from, d$edges$to),
+      c("input output", "output w")
+    )
+    p <- tar_ggplot(collapse_by = "description", node_color = "description")
+    expect_silent(ggplot2::ggplot_build(p))
+  })
+})
+
+test_that("tar_ggplot() sends node_size and edge_width on to the plot", {
+  testthat::local_mocked_bindings(tar_dag = function(...) stage_dag())
+  p <- tar_ggplot(collapse_by = "stage", node_size = "n", edge_width = "n")
+  ref <- ggplot_dag(
+    dag_collapse(stage_dag(), "stage"),
+    node_size = "n",
+    edge_width = "n"
+  )
+  built <- ggplot2::ggplot_build(p)
+  expect_identical(built$data, ggplot2::ggplot_build(ref)$data)
+  # ...and they made a difference
+  plain <- tar_ggplot(collapse_by = "stage")
+  expect_false(identical(built$data, ggplot2::ggplot_build(plain)$data))
+  expect_error(tar_ggplot(node_size = "nope"), "not a node column")
+  expect_error(tar_ggplot(edge_width = "nope"), "not an edge column")
 })

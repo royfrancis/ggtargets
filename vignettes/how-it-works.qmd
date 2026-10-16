@@ -1,5 +1,5 @@
 ---
-title: "How metro layout works"
+title: "How the metro layout works"
 vignette: >
   %\VignetteIndexEntry{How the metro layout works}
   %\VignetteEngine{quarto::html}
@@ -61,7 +61,7 @@ knitr::opts_chunk$set(dag_fig = TRUE)
 library(ggtargets)
 ```
 
-The metro style is an R reimplementation of the Python package [dagviz](https://pypi.org/project/dagviz/) (Wim Yedema, Apache-2.0), which [snakevision](https://github.com/OpenOmics/snakevision)'s workflow diagrams also use. This article walks through what those lines do, on small examples chosen to show one idea at a time.
+The metro style is an R reimplementation of the Python package [dagviz](https://pypi.org/project/dagviz/) (Wim Yedema, Apache-2.0), which [snakevision](https://github.com/OpenOmics/snakevision)'s workflow diagrams also use. This article walks through what the layout does, on small examples chosen to show one idea at a time.
 
 ## Row order
 
@@ -91,7 +91,7 @@ A node's own column is a *lane*: once it has more than one thing depending on it
 
 ```{r}
 #| label: fan-out
-#| fig-alt: "One node with three children, each child in its own column to the left of the parent's lane."
+#| fig-alt: "One node with three children: the first two share a column to the left of the parent's, and the third is in the parent's own column."
 dag2 <- as_dag(data.frame(from = "root", to = c("leaf1", "leaf2", "leaf3")))
 ggplot_dag(dag2)
 ```
@@ -101,15 +101,15 @@ ggplot_dag(dag2)
 dag_layout(dag2, style_metro())$nodes[, c("name", "row", "col")]
 ```
 
-`root`'s own lane (column 0) stays open through all three rows, since `leaf3` is still waiting on it; `leaf1` and `leaf2` each open - and immediately close - their own column, since they have no further children of their own.
+`root`'s own lane (column 0) stays open until `leaf3`, the last of its children, consumes it. `leaf1` has no children of its own, so the column it opens (-1) is free again at once, and `leaf2` takes it. `leaf3` consumes the last of `root`'s lane, which frees it, so `leaf3` takes that lane and ends up back in column 0.
 
 ## Lane reuse
 
-Freed lanes are reused last-in-first-out. In this diamond, `a`'s lane (out-degree 2) stays open through `b` and `c`; `b`'s own lane frees as soon as `d` consumes it, and `c` immediately reuses that exact column, rather than opening a new one:
+Freed lanes are reused last-in-first-out: a node takes the lane that was freed last. In this diamond, `a`'s lane (out-degree 2) stays open through `b`, which opens a column of its own (-1). `c` consumes the last of `a`'s lane, which frees it, so `c` reuses it, in column 0. Then `d` consumes both `b` and `c`: `b`'s lane frees first and `c`'s second, so `d` takes `c`'s, column 0 again, rather than opening a new one:
 
 ```{r}
 #| label: diamond
-#| fig-alt: "A diamond graph: a splits into b and c, which both feed into d. b and c's rows share the same column."
+#| fig-alt: "A diamond graph: a splits into b and c, which both feed into d. b is in a column to the left; a, c and d share the right-hand column."
 dag3 <- as_dag(
   data.frame(from = c("a", "a", "b", "c"), to = c("b", "c", "d", "d"))
 )
@@ -123,11 +123,11 @@ dag_layout(dag3, style_metro())$nodes[, c("name", "row", "col")]
 
 ## Arcs
 
-When a lane's row isn't in the same column as the node consuming it, the connection bends: a quarter-circle arc from the lane down to the row, then a short horizontal run into the node. `b` and `c` above already showed one each; a node with several inputs arriving from different columns shows more clearly:
+When a lane's row isn't in the same column as the node consuming it, the connection bends: a quarter-circle arc from the lane down to the row, then a short horizontal run into the node. `b` and `d` above already showed one each; a node with several inputs arriving from different columns shows more clearly:
 
 ```{r}
 #| label: fan-in
-#| fig-alt: "Three separate lanes all arcing in to a single node at the bottom."
+#| fig-alt: "Three nodes all feeding one node at the bottom: the lanes of the first two arc in from the right, and the third comes straight down."
 dag4 <- as_dag(data.frame(from = c("src1", "src2", "src3"), to = "sink"))
 ggplot_dag(dag4)
 ```

@@ -17,10 +17,12 @@ check_node_names(x, what)
 \description{
 Node names are this package's join keys: downstream, edge colors are
 matched on \code{paste(from, to, sep = "|")} (see
-\code{\link[=resolve_edge_color]{resolve_edge_color()}}), and \code{NA} has no identity at all. Rejecting \code{|}
-and carriage returns in the one constructor every \code{dag} passes through
-is what makes those keys collision-free everywhere else, without the
-rendering path needing a collision-proof key scheme of its own.
+\code{\link[=resolve_edge_color]{resolve_edge_color()}}), and \code{NA} has no identity at all. Neither has an
+empty name, which can't even be looked up by name in an environment (as
+\code{\link[=find_cycle]{find_cycle()}} does). Rejecting \code{|} and carriage returns in the one
+constructor every \code{dag} passes through is what makes those keys
+collision-free everywhere else, without the rendering path needing a
+collision-proof key scheme of its own.
 }
 \details{
 Names only: node attributes such as \code{status}, \code{seconds} and \code{bytes}

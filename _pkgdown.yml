@@ -50,19 +50,21 @@ reference:
 - title: Build plots from any DAG
   contents:
    - as_dag
+   - dag_collapse
    - dag_layout
    - ggplot_dag
    - dag_size
    - ggsave_dag
 
 - title: Style and layers
-  contents: 
+  contents:
    - style_metro
    - dag_layers
    - dag_theme
+
 - title: Colors
-  contents: 
-  - metro_palette
+  contents:
+   - metro_palette
 
 articles:
 
@@ -71,7 +73,7 @@ articles:
 
 - title: Using ggtargets
   navbar: Usage
-  contents: [articles/colors, customizing, articles/ggplot2-integration, other-inputs]
+  contents: [articles/colors, customizing, articles/collapsing, articles/ggplot2-integration, other-inputs]
 
 - title: Examples
   navbar: Examples

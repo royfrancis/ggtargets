@@ -29,6 +29,11 @@ its \code{vertices}/\code{edges} result with \code{\link[=as_dag]{as_dag()}}, ke
 \code{\link[=ggplot_dag]{ggplot_dag()}} draws as the node shape, see \code{\link[=targets_node_shapes]{targets_node_shapes()}}),
 \code{status}, \code{description}, \code{seconds}, \code{bytes} and \code{branches}.
 }
+\details{
+\code{description} is the one free-form field \code{targets} has for a target, and
+can hold the stage it belongs to, for \code{\link[=dag_collapse]{dag_collapse()}} to collapse the
+pipeline by: see "Collapsing a pipeline by stage" in \code{\link[=tar_ggplot]{tar_ggplot()}}.
+}
 \examples{
 \dontshow{if (requireNamespace("targets", quietly = TRUE)) withAutoprint(\{ # examplesIf}
 targets::tar_dir({ # doesn't pollute the working directory

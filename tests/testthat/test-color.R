@@ -1,4 +1,4 @@
-# Section 6's color resolution rules, tested directly against
+# The color resolution rules, tested directly against
 # resolve_node_color()/resolve_edge_color()/resolve_value_palette().
 
 test_that("resolve_value_palette: character column, order of first appearance", {
@@ -34,6 +34,13 @@ test_that("resolve_value_palette: unmatched values in a named palette get gray, 
   expect_identical(unname(res$map["y"]), "#94a4ac")
 })
 
+test_that("resolve_value_palette: an empty-string value gets its palette color like any other", {
+  # a name subscript of "" never matches, so the lookup is by position
+  res <- resolve_value_palette(c("", "a", ""), c("red", "blue"))
+  expect_identical(res$colors, c("red", "blue", "red"))
+  expect_identical(names(res$map), c("", "a"))
+})
+
 test_that("resolve_value_palette: an unnamed vector too short is an error", {
   expect_error(resolve_value_palette(c("x", "y", "z"), c("red", "blue")))
 })
@@ -44,7 +51,7 @@ test_that("resolve_value_palette: a function returning too few colors is an erro
   }))
 })
 
-test_that("resolve_node_color: NULL gives one palette color per node, by row", {
+test_that("resolve_node_color: NULL gives each node the palette color of its color_index", {
   nodes <- data.frame(
     name = c("a", "b", "c"),
     row = c(0, 1, 2),
@@ -54,6 +61,17 @@ test_that("resolve_node_color: NULL gives one palette color per node, by row", {
   res <- resolve_node_color(nodes, NULL, metro_palette)
   expect_identical(res$colors, stats::setNames(metro_palette(3), nodes$name))
   expect_false(res$legend)
+
+  # a color_index is not a row: nodes that share one share a color, and only
+  # as many colors are asked for as there are indices
+  nodes$color_index <- c(0, 1, 0)
+  asked <- NULL
+  res <- resolve_node_color(nodes, NULL, function(n) {
+    asked <<- n
+    c("red", "blue", "green")[seq_len(n)]
+  })
+  expect_equal(asked, 2)
+  expect_identical(unname(res$colors), c("red", "blue", "red"))
 })
 
 test_that("resolve_node_color: a column name maps and shows a legend", {
@@ -71,7 +89,7 @@ test_that("resolve_node_color: a column name maps and shows a legend", {
   expect_false(identical(unname(res$colors["a"]), unname(res$colors["b"])))
 })
 
-test_that("resolve_node_color: a column name that is also a valid color name means the column (rule 3)", {
+test_that("resolve_node_color: a column name that is also a valid color name means the column", {
   nodes <- data.frame(
     name = c("a", "b"),
     row = c(0, 1),
@@ -244,35 +262,109 @@ test_that("resolve_node_color()/resolve_edge_color(): non-character argument err
     color_index = 0,
     stringsAsFactors = FALSE
   )
-  expect_error(resolve_node_color(nodes, 123, metro_palette))
+  expect_error(resolve_node_color(nodes, 123, metro_palette), "single color")
   edge_paths <- data.frame(
     from = "a",
     to = "b",
     piece = "vline",
     stringsAsFactors = FALSE
   )
-  expect_error(resolve_edge_color(edge_paths, 123, c(a = "red", b = "green")))
+  expect_error(
+    resolve_edge_color(edge_paths, 123, c(a = "red", b = "green")),
+    "single color"
+  )
 })
 
-test_that("find_cycle(): a cycle found via one successor stops checking a node's other successors", {
-  # a -> b -> a (cycle), and a -> c: once the cycle is found while
-  # visiting b (a's first successor), visiting c must be skipped.
-  edges <- data.frame(
-    from = c("a", "b", "a"),
-    to = c("b", "a", "c"),
+test_that("`NA` is not a color for node_color or edge_color", {
+  # col2rgb(NA) is transparent white, but every node or edge would get a
+  # missing color, which ggplot2 drops without a word
+  nodes <- data.frame(
+    name = "a",
+    row = 0,
+    color_index = 0,
     stringsAsFactors = FALSE
   )
-  cyc <- find_cycle(c("a", "b", "c"), edges)
-  expect_identical(cyc, c("a", "b", "a"))
+  expect_error(
+    resolve_node_color(nodes, NA_character_, metro_palette),
+    "not a node column name or a valid color"
+  )
+  edge_paths <- data.frame(
+    from = "a",
+    to = "b",
+    piece = "vline",
+    stringsAsFactors = FALSE
+  )
+  expect_error(
+    resolve_edge_color(edge_paths, NA_character_, c(a = "red", b = "green")),
+    "not \"source\", \"target\", or a valid color"
+  )
 })
 
-test_that("a wide DAG with more than 21 lanes gets all-distinct lane colors", {
+test_that("a wide DAG with more nodes than the 18 base colors gets all-distinct colors", {
   d <- as_dag(data.frame(from = "root", to = paste0("t", 1:30)))
   lay <- dag_layout(d)
   res <- resolve_node_color(lay$nodes, NULL, metro_palette)
-  lanes <- unique(lay$nodes$color_index)
-  expect_gt(length(lanes), 21)
+  indices <- unique(lay$nodes$color_index)
+  expect_gt(length(indices), length(metro_base_colors))
   expect_false(
-    anyDuplicated(res$colors[match(lanes, lay$nodes$color_index)]) > 0
+    anyDuplicated(res$colors[match(indices, lay$nodes$color_index)]) > 0
   )
+})
+
+test_that("resolve_value_palette(): NA is not a value, so it takes no palette color and has no map entry", {
+  gray <- value_na_color
+  values <- c("a", NA, "b", NA)
+
+  # a function is asked for the two real values, not three
+  asked <- NULL
+  res <- resolve_value_palette(values, function(n) {
+    asked <<- n
+    c("red", "blue", "green")[seq_len(n)]
+  })
+  expect_identical(asked, 2L)
+  expect_identical(res$colors, c("red", gray, "blue", gray))
+  expect_identical(names(res$map), c("a", "b"))
+
+  res <- resolve_value_palette(values, c("red", "blue"))
+  expect_identical(res$colors, c("red", gray, "blue", gray))
+
+  # a named palette: no warning for the NA, but a value it doesn't name warns
+  expect_no_warning(res <- resolve_value_palette(values, c(a = "red", b = "blue")))
+  expect_identical(res$colors, c("red", gray, "blue", gray))
+  expect_warning(
+    resolve_value_palette(c("a", NA, "zzz"), c(a = "red")),
+    "zzz"
+  )
+
+  # a factor, with a level that doesn't occur, and a numeric column
+  f <- factor(c("a", NA, "b"), levels = c("a", "b", "unused"))
+  res <- resolve_value_palette(f, c("red", "blue", "green"))
+  expect_identical(res$colors, c("red", gray, "blue"))
+  expect_identical(names(res$map), c("a", "b", "unused"))
+  res <- resolve_value_palette(c(1, NA, 2), c("red", "blue"))
+  expect_identical(res$colors, c("red", gray, "blue"))
+
+  # nothing but NA: nothing to map, every color the gray
+  res <- resolve_value_palette(c(NA_character_, NA), metro_palette)
+  expect_identical(res$colors, c(gray, gray))
+  expect_length(res$map, 0L)
+})
+
+test_that("resolve_node_color(): a column of nothing but NA has no legend", {
+  nodes <- data.frame(
+    name = c("a", "b"),
+    row = 0:1,
+    color_index = 0:1,
+    v = NA_character_,
+    stringsAsFactors = FALSE
+  )
+  res <- resolve_node_color(nodes, "v", metro_palette)
+  expect_false(res$legend)
+  expect_null(res$title)
+  expect_identical(unname(res$colors), c(value_na_color, value_na_color))
+
+  nodes$v <- c("x", NA)
+  res <- resolve_node_color(nodes, "v", metro_palette)
+  expect_true(res$legend)
+  expect_identical(res$title, "v")
 })

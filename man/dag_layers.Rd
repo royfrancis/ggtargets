@@ -11,6 +11,8 @@ dag_layers(
   palette = metro_palette,
   node_shape = NULL,
   shapes = targets_node_shapes(),
+  node_size = NULL,
+  edge_width = NULL,
   zoom = 1
 )
 }
@@ -19,9 +21,10 @@ dag_layers(
 
 \item{node_color, palette, edge_color}{Color resolution arguments: see
 the pkgdown site's Colors article for the full set of rules and
-examples. \code{palette} must supply at least one color per lane (or per
+examples. \code{palette} must supply at least one color per node (or per
 distinct value of a \code{node_color} column); colors are never recycled,
-and the default \code{\link[=metro_palette]{metro_palette()}} never repeats one.}
+and the default \code{\link[=metro_palette]{metro_palette()}} never repeats one. \code{palette = NULL}
+is the same as the default, \code{\link[=metro_palette]{metro_palette()}}.}
 
 \item{node_shape}{The shape of a node: \code{NULL} (the default), a node
 column name, or a single shape name. A shape is \code{"circle"}, \code{"square"},
@@ -38,6 +41,33 @@ legend. Remove it with \code{+ ggplot2::guides(shape = "none")}.}
 named character vector (value -> shape), or an unnamed one of shapes
 assigned to the distinct values in order, which must supply at least
 one per value. Defaults to \code{\link[=targets_node_shapes]{targets_node_shapes()}}.}
+
+\item{node_size}{The size of a node: \code{NULL} (the default, every node has
+the radius \code{node_radius}), or the name of a numeric node column, such as
+the \code{n} that \code{\link[=dag_collapse]{dag_collapse()}} adds (or \code{seconds} or \code{bytes} of a pipeline
+from \code{\link[=tar_dag]{tar_dag()}}). The radius follows the square root of the value's
+position between the smallest and the largest value, over the
+\code{node_size_range} of \code{\link[=style_metro]{style_metro()}}, so that it is about the node's
+area that grows in step with the value. A node with an \code{NA} value has the
+radius \code{node_radius}. There is no
+legend for the size: for a collapsed graph, the labels carry the count.
+The largest radius a circle may have keeps it inside the grid, but a
+triangle or diamond reaches further (see \code{node_radius} of
+\code{\link[=style_metro]{style_metro()}}), so with a \code{node_shape} of those, the biggest ones in the
+first or last row, or the left column, may be cut off: raise \code{scale}.
+Two of the biggest nodes in neighboring rows leave almost no room for
+the line between them: see \code{node_size_range} of \code{\link[=style_metro]{style_metro()}}.}
+
+\item{edge_width}{The width of an edge: \code{NULL} (the default, every edge is
+\code{edge_stroke_width} wide), or the name of a numeric column of the \code{dag}'s
+\code{edges}, such as the \code{n} of \code{\link[=dag_collapse]{dag_collapse()}}. The width grows linearly
+with the value, over the \code{edge_width_range} of \code{\link[=style_metro]{style_metro()}}. An edge
+with an \code{NA} value is \code{edge_stroke_width}. In this metro layout the
+edges from one node share a line, and so do those entering one node
+from the same side, so a shared line is as wide as the widest edge it
+carries. Each edge is then drawn whole (as for any \code{edge_color} but
+\code{"source"}), the widest first, so that the narrower ones stay visible on
+top; and each bridge is wide enough for the widest edge drawn over it.}
 
 \item{zoom}{Multiplier for node size, line widths and text size, to match
 a panel sized at \code{zoom} px per data unit (see \code{\link[=ggplot_dag]{ggplot_dag()}}).}

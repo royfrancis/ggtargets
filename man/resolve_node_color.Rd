@@ -14,8 +14,9 @@ resolve_node_color(nodes, node_color, palette)
 
 \item{palette}{A \verb{function(n)}, an unnamed color vector, or (when
 \code{node_color} names a column) a named color vector. With
-\code{node_color = NULL}, \code{n} is the number of lanes (\code{color_index}
-values) and too few colors is an error.}
+\code{node_color = NULL}, each node takes the color of its \code{color_index}, \code{n}
+is the number of those indices (one per node in the metro layout), and
+too few colors is an error.}
 }
 \value{
 A list with \code{colors} (named by node \code{name}), \code{legend} (whether

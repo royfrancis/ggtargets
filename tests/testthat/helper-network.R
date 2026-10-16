@@ -26,6 +26,25 @@ fake_network <- function() {
   )
 }
 
+# A pipeline in three stages, for collapsing: raw -> clean -> fit -> eval ->
+# report, plus a `fit2` that also feeds `eval`. `seconds` has an NA, and
+# `type` differs inside the "model" stage.
+stage_dag <- function() {
+  as_dag(
+    data.frame(
+      from = c("raw", "clean", "clean", "fit", "fit2", "eval"),
+      to = c("clean", "fit", "fit2", "eval", "eval", "report")
+    ),
+    nodes = data.frame(
+      name = c("raw", "clean", "fit", "fit2", "eval", "report"),
+      stage = c("data", "data", "model", "model", "model", "report"),
+      type = c("stem", "stem", "stem", "stem", "pattern", "stem"),
+      seconds = c(1, NA, 2, 3, 4, NA),
+      stringsAsFactors = FALSE
+    )
+  )
+}
+
 # What tar_dag() returns, for stubbing it out: a small dag with a
 # `type` column to color by (two values) and a `status` column (three).
 fake_dag <- function() {
