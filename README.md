@@ -1,6 +1,6 @@
 # ggtargets <a href='https://github.com/royfrancis/ggtargets'><img src='man/figures/logo-light.webp' align="right" height="200px" /></a>
 
-[![ci_linux](https://github.com/royfrancis/ggtargets/actions/workflows/linux.yml/badge.svg)](https://github.com/royfrancis/ggtargets/actions/workflows/linux.yml) [![ci_windows](https://github.com/royfrancis/ggtargets/actions/workflows/windows.yml/badge.svg)](https://github.com/royfrancis/ggtargets/actions/workflows/windows.yml) [![ci_pixi](https://github.com/royfrancis/ggtargets/actions/workflows/pixi.yml/badge.svg)](https://github.com/royfrancis/ggtargets/actions/workflows/pixi.yml) [![codecov](https://codecov.io/gh/royfrancis/ggtargets/branch/main/graph/badge.svg?token=4DOQ8HNQFK)](https://app.codecov.io/gh/royfrancis/ggtargets/) [![r-universe status](https://royfrancis.r-universe.dev/ggtargets/badges/checks)](https://royfrancis.r-universe.dev/ggtargets) ![status: experimental](https://github.com/GIScience/badges/raw/master/status/experimental.svg)
+[![ci_linux](https://github.com/royfrancis/ggtargets/actions/workflows/linux.yml/badge.svg)](https://github.com/royfrancis/ggtargets/actions/workflows/linux.yml) [![ci_windows](https://github.com/royfrancis/ggtargets/actions/workflows/windows.yml/badge.svg)](https://github.com/royfrancis/ggtargets/actions/workflows/windows.yml) [![ci_pixi](https://github.com/royfrancis/ggtargets/actions/workflows/pixi.yml/badge.svg)](https://prefix.dev/channels/@royfrancis/ggtargets/packages/r-ggtargets) [![codecov](https://codecov.io/gh/royfrancis/ggtargets/branch/main/graph/badge.svg?token=4DOQ8HNQFK)](https://app.codecov.io/gh/royfrancis/ggtargets/) [![r-universe status](https://royfrancis.r-universe.dev/ggtargets/badges/checks)](https://royfrancis.r-universe.dev/ggtargets) ![status: experimental](https://github.com/GIScience/badges/raw/master/status/experimental.svg)
 
 **ggtargets** creates metro-style diagrams of the dependency graphs of [targets](https://docs.ropensci.org/targets/) pipelines, and of other directed acyclic graphs, using ggplot2.
 
@@ -8,18 +8,44 @@
 
 ## Installation
 
-Install from GitHub:
+There are several ways to install **ggtargets**: from GitHub, from [r-universe](https://royfrancis.r-universe.dev/ggtargets), with [pixi](https://pixi.sh), or with [conda](https://docs.conda.io). Choose your preferred method.
 
-``` r
-# install.packages("remotes")
-remotes::install_github("royfrancis/ggtargets")
-```
+- Install from GitHub:
+
+  ```r
+  # install.packages("remotes")
+  remotes::install_github("royfrancis/ggtargets")
+  ```
+
+- Install from [r-universe](https://royfrancis.r-universe.dev/ggtargets):
+
+  ```r
+  install.packages(
+    "ggtargets",
+    repos = c("https://royfrancis.r-universe.dev", "https://cloud.r-project.org")
+  )
+  ```
+
+- Install with [pixi](https://pixi.sh) from the [prefix.dev channel](https://prefix.dev/channels/@royfrancis/ggtargets/packages/r-ggtargets):
+
+  ```sh
+  pixi workspace channel add --prepend https://prefix.dev/royfrancis/ggtargets
+  pixi add r-ggtargets
+  pixi add r-targets   # only needed for tar_ggplot()
+  ```
+
+- Install with [conda](https://docs.conda.io) from the [prefix.dev channel](https://prefix.dev/channels/@royfrancis/ggtargets/packages/r-ggtargets):
+
+  ```sh
+  conda install -c https://prefix.dev/royfrancis/ggtargets -c conda-forge r-ggtargets
+  conda install -c conda-forge r-targets   # only needed for tar_ggplot()
+  ```
 
 ## Quick start
 
 Inside a `targets` project:
 
-``` r
+```r
 library(ggtargets)
 tar_ggplot()
 tar_ggplot(node_color = "status", palette = targets_status_colors())
@@ -27,7 +53,7 @@ tar_ggplot(node_color = "status", palette = targets_status_colors())
 
 ## Example: a `targets` pipeline
 
-``` r
+```r
 withr::with_dir(withr::local_tempdir(), {
   targets::tar_script(list(
     tar_target(n, 20),
@@ -45,7 +71,7 @@ withr::with_dir(withr::local_tempdir(), {
 
 Color by build status to see what's out of date at a glance:
 
-``` r
+```r
 withr::with_dir(withr::local_tempdir(), {
   targets::tar_script(list(
     tar_target(n, 20),
@@ -64,7 +90,7 @@ withr::with_dir(withr::local_tempdir(), {
 
 Nodes are drawn by their type, as `targets::tar_visnetwork()` does: a circle for a regular target, a square for a dynamic-branching one, and an up and a down triangle for imported functions and objects (which are in the graph with `targets_only = FALSE`). A legend names the shapes:
 
-``` r
+```r
 withr::with_dir(withr::local_tempdir(), {
   targets::tar_script({
     simulate <- function(group) rnorm(10, mean = match(group, letters))
@@ -82,7 +108,7 @@ withr::with_dir(withr::local_tempdir(), {
 
 A pipeline of many targets is easier to read as a few stages. `targets` has no tag field for a target, but its `description` is free text, so a stage can go there (`tar_option_set(description = )` sets it for a block of targets). `collapse_by = "description"` merges the targets that share one into a node, with their number in the label, and `node_size` and `edge_width` show those counts:
 
-``` r
+```r
 withr::with_dir(withr::local_tempdir(), {
   targets::tar_script({
     tar_option_set(description = "ingest")
@@ -113,7 +139,7 @@ See the "Collapsing a pipeline by stage" section of `?tar_ggplot` for the detail
 
 `ggplot_dag()`/`as_dag()` work with any edge-list data frame, not just a `targets` pipeline:
 
-``` r
+```r
 edges <- data.frame(from = c("a", "a", "b", "c"), to = c("b", "c", "d", "d"))
 nodes <- data.frame(name = c("a", "b", "c", "d"), type = c("input", "process", "process", "output"))
 ggplot_dag(as_dag(edges, nodes = nodes), node_color = "type")
