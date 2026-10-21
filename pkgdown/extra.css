@@ -394,8 +394,50 @@ main img {
   background: #ffffff;
 }
 
-main img.ggtargets-logo {
-  box-shadow: none;
+/* Home sidebar: the hex sticker above the links (a pkgdown sidebar component; the wrapper
+   class is the slug of its title in _pkgdown.yml). The heading stays for screen readers. */
+
+.template-home aside .hex-sticker h2 {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.template-home aside .hex-sticker ul,
+.template-home aside .hex-sticker li,
+.template-home aside .hex-sticker p {
+  margin: 0;
+  padding: 0;
+}
+
+.template-home aside .ggtargets-logo {
+  display: block;
+  width: min(180px, 12rem);
+  height: auto;
+  margin-top: 1.25rem;
+  filter: drop-shadow(0 8px 16px var(--gg-shadow)) drop-shadow(0 0 14px var(--gg-content-shadow));
+  transform-origin: center;
+  transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1), filter 0.4s ease;
+}
+
+.template-home aside .ggtargets-logo:hover {
+  filter: drop-shadow(0 10px 18px var(--gg-shadow)) drop-shadow(0 0 22px var(--gg-content-shadow));
+  transform: rotate(-2deg) scale(1.06);
+}
+
+/* the light switch sets data-bs-theme on <html>; show the logo that matches it */
+.template-home aside .ggtargets-logo-dark,
+[data-bs-theme="dark"] .template-home aside .ggtargets-logo-light {
+  display: none;
+}
+
+[data-bs-theme="dark"] .template-home aside .ggtargets-logo-dark {
+  display: block;
 }
 
 .template-home main > .section > p:first-of-type {
@@ -764,6 +806,10 @@ footer p {
   *::after {
     scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;
+  }
+
+  .template-home aside .ggtargets-logo:hover {
+    transform: none;
   }
 }
 

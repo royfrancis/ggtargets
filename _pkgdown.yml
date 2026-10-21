@@ -36,7 +36,15 @@ navbar:
 home:
   title: "ggtargets: metro-style ggplot2 plots of targets pipelines"
   sidebar:
-    structure: [links, license, citation, authors, dev]
+    # the hex sticker leads the sidebar (no script needed); the default sections follow.
+    # pkgdown classes the wrapper div by the slug of the title ("Hex sticker" -> .hex-sticker),
+    # which pkgdown/extra.css styles. Both logos are in the markup; extra.css shows the one
+    # matching the light/dark switch.
+    structure: [logo, links, license, citation, authors, dev]
+    components:
+      logo:
+        title: Hex sticker
+        text: '<img class="ggtargets-logo ggtargets-logo-light" src="reference/figures/logo-light.webp" alt="ggtargets logo" width="140" height="161"><img class="ggtargets-logo ggtargets-logo-dark" src="reference/figures/logo-dark.webp" alt="ggtargets logo" width="140" height="161">'
 
 reference:
 

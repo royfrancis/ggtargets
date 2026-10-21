@@ -1,4 +1,4 @@
-# ggtargets <img class="ggtargets-logo" src="reference/figures/logo-light.webp" alt="ggtargets-logo" style="width:160px;float:right;" align="right" />
+# ggtargets
 
 [![ci_linux](https://github.com/royfrancis/ggtargets/actions/workflows/linux.yml/badge.svg)](https://github.com/royfrancis/ggtargets/actions/workflows/linux.yml) [![ci_windows](https://github.com/royfrancis/ggtargets/actions/workflows/windows.yml/badge.svg)](https://github.com/royfrancis/ggtargets/actions/workflows/windows.yml) [![ci_pixi](https://github.com/royfrancis/ggtargets/actions/workflows/pixi.yml/badge.svg)](https://prefix.dev/channels/@royfrancis/ggtargets/packages/r-ggtargets) [![codecov](https://codecov.io/gh/royfrancis/ggtargets/branch/main/graph/badge.svg?token=4DOQ8HNQFK)](https://app.codecov.io/gh/royfrancis/ggtargets/) [![r-universe status](https://royfrancis.r-universe.dev/ggtargets/badges/checks)](https://royfrancis.r-universe.dev/ggtargets) ![status: experimental](https://github.com/GIScience/badges/raw/master/status/experimental.svg)
 
