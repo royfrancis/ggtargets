@@ -105,3 +105,42 @@
   else if (document.readyState === "complete") init();
   else window.addEventListener("load", init);
 })();
+
+/* The heading line ends at the last heading. When that is an h3 (the last section has h3s), the
+   rail has to stop at its station, and how far that is from the section's end depends on the
+   height of the text and plots below it, which only the browser knows. Measure it and hand it to
+   the rail as --gg-rail-end (see extra.css). The station is 0.625em down its heading. */
+(function () {
+  function place(section) {
+    var heads = section.querySelectorAll(".level3 > h3");
+    var last = heads[heads.length - 1];
+    var station = last.getBoundingClientRect().top +
+      0.625 * parseFloat(window.getComputedStyle(last).fontSize);
+    var end = section.getBoundingClientRect().bottom - station;
+    section.style.setProperty("--gg-rail-end", Math.max(end, 0) + "px");
+  }
+
+  function init() {
+    var sections = document.querySelectorAll("main :is(section, .section).level2:last-of-type");
+    Array.prototype.forEach.call(sections, function (section) {
+      if (!section.querySelector(":scope > h2") || !section.querySelector(".level3 > h3")) return;
+      place(section);
+      // images and plots resize the section once they load
+      if (window.ResizeObserver) {
+        new window.ResizeObserver(function () {
+          place(section);
+        }).observe(section);
+      } else {
+        window.addEventListener("resize", function () {
+          place(section);
+        });
+        window.addEventListener("load", function () {
+          place(section);
+        });
+      }
+    });
+  }
+
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
+  else init();
+})();

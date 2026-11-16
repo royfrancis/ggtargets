@@ -100,7 +100,7 @@
 }
 
 /* Each part of the site is a metro line with its own colour (--gg-line): the nav marker, the
-   section rails, the table of contents and the footer all follow it. The page type is a class
+   section rails and the table of contents all follow it. The page type is a class
    on the content container, which does not contain the navbar, hence :has() on the body.
    Without :has() support every page keeps the home page's teal. */
 
@@ -405,7 +405,9 @@ h4 .anchor {
    a station at each heading, a small one at each h3. Articles use <section class="level2">,
    the other pages <div class="section level2">. The reference index draws its own lines
    (see "Reference pages"). The rail runs on through the gap to the next heading
-   (2.8rem, the h2's top margin, plus the 1.1rem down to its station) and stops at the last. */
+   (2.8rem, the h2's top margin, plus the 1.1rem down to its station), so the line ends at the
+   last heading: the last section has no rail of its own, or, if it has h3s, one that stops at
+   the last h3's station (extra.js measures where and sets --gg-rail-end). */
 
 .container:not(.template-reference-index) main :is(section, .section).level2:has(> h2) {
   --gg-rail-gap: 1.75rem;
@@ -425,8 +427,13 @@ h4 .anchor {
   content: "";
 }
 
+/* until extra.js has measured it (or without it) the rail runs to the section's end */
 .container:not(.template-reference-index) main :is(section, .section).level2:has(> h2):last-of-type::before {
-  bottom: 0;
+  bottom: var(--gg-rail-end, 0);
+}
+
+.container:not(.template-reference-index) main :is(section, .section).level2:has(> h2):last-of-type:not(:has(.level3 > h3))::before {
+  display: none;
 }
 
 .container:not(.template-reference-index) main :is(section, .section).level2 > h2 {
@@ -788,10 +795,10 @@ pre a:hover {
 }
 
 /* The index as a metro map: one continuous line (the page's red) runs from the first group's
-   number through every function and on to the footer. A group heading is a big numbered
+   number through every function to the last one. A group heading is a big numbered
    station, a function a small one with a dashed leader to its description like the plot labels.
    pkgdown writes a group as two sibling .section.level2 (the heading with an empty dl, then the
-   entries). --gg-rail-x is the line's left edge; the footer's line rises there. */
+   entries). --gg-rail-x is the line's left edge. */
 
 .template-reference-index {
   --gg-rail-x: calc(1.05rem - 2.5px);
@@ -838,8 +845,7 @@ pre a:hover {
    centre of the next (past the entries' end, over the 3rem gap, plus half a line). It is drawn
    under the numbers (z-index -1), so their white fill and ring cover the rail's ends and the
    exact position of a number inside its line does not matter; the stations are positioned and
-   stay on top. After the last group it stops at the last station (half a row up) and the
-   footer's line takes over. */
+   stay on top. After the last group it stops at the last station (half a row up). */
 .template-reference-index main dl {
   position: relative;
   display: grid;
@@ -998,7 +1004,6 @@ blockquote {
 /* Footer ------------------------------------------------------------------ */
 
 footer {
-  position: relative;
   display: flex;
   justify-content: space-between;
   gap: 2rem;
@@ -1010,51 +1015,6 @@ footer {
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-}
-
-/* the page's line ends here: the strip runs out to a terminus, an interchange pill. The strip
-   is 5px tall, the pill 19px, so the pill starts 7px above the footer; the strip runs under it
-   to its middle (half of 2.6rem). */
-footer::before {
-  position: absolute;
-  top: 0;
-  right: 1.3rem;
-  left: 0;
-  height: 5px;
-  border-radius: 5px;
-  background: var(--gg-line);
-  content: "";
-}
-
-footer::after {
-  position: absolute;
-  top: -7px;
-  right: 0;
-  box-sizing: border-box;
-  width: 2.6rem;
-  height: 19px;
-  border: 3px solid var(--gg-station-ring);
-  border-radius: 999px;
-  background: var(--gg-station-fill);
-  content: "";
-}
-
-/* Where the page has the heading line, the footer's line rises at its left end to join it: an
-   L with a rounded corner, whose vertical part is the rail's own column (0.5rem in, 5px wide;
-   the reference index sets --gg-rail-x for its own column). It starts 7rem up, well inside the
-   last rail, because the gap above the footer (4rem plus the last element's margin) varies;
-   over the rail it is the same colour, so the overlap does not show. z-index -1 keeps it under
-   the rail's stations. Pages without headings have no rail and keep the plain strip. */
-.container:has(main :is(section, .section).level2 > h2) footer::before {
-  z-index: -1;
-  top: -7rem;
-  left: var(--gg-rail-x, 0.5rem);
-  box-sizing: border-box;
-  height: calc(7rem + 5px);
-  border-bottom: 5px solid var(--gg-line);
-  border-left: 5px solid var(--gg-line);
-  border-radius: 0 0 0 1.5rem;
-  background: none;
 }
 
 footer p {
